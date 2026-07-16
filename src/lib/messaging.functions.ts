@@ -181,8 +181,8 @@ export const sendMessage = createServerFn({ method: "POST" })
         message_id: message.id,
         recipient_user_id: e.recipientUserId,
         recipient_device_id: e.recipientDeviceId,
-        ciphertext: Buffer.from(e.ciphertext, "base64"),
-        ciphertext_nonce: e.ciphertextNonce ? Buffer.from(e.ciphertextNonce, "base64") : null,
+        ciphertext: toHex(e.ciphertext),
+        ciphertext_nonce: e.ciphertextNonce ? toHex(e.ciphertextNonce) : null,
         ciphertext_algorithm: e.ciphertextAlgorithm ?? data.ciphertextAlgorithm,
         ciphertext_version: e.ciphertextVersion,
       }));
