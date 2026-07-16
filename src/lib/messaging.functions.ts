@@ -150,8 +150,10 @@ export const sendMessage = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
 
-    const ciphertext = Buffer.from(data.ciphertext, "base64");
-    const ciphertextNonce = data.ciphertextNonce ? Buffer.from(data.ciphertextNonce, "base64") : null;
+    // bytea columns travel as `\x<hex>` strings over PostgREST.
+    const toHex = (b64: string) => "\\x" + Buffer.from(b64, "base64").toString("hex");
+    const ciphertext = toHex(data.ciphertext);
+    const ciphertextNonce = data.ciphertextNonce ? toHex(data.ciphertextNonce) : null;
 
     const { data: message, error } = await supabase
       .from("messages")
