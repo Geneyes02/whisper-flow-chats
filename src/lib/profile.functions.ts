@@ -122,6 +122,7 @@ export const registerDevice = createServerFn({ method: "POST" })
   )
   .handler(async ({ context, data }) => {
     const { supabase, userId } = context;
+    const toHex = (b64?: string) => (b64 ? "\\x" + Buffer.from(b64, "base64").toString("hex") : null);
     const { data: row, error } = await supabase
       .from("devices")
       .insert({
@@ -129,9 +130,9 @@ export const registerDevice = createServerFn({ method: "POST" })
         name: data.name,
         platform: data.platform,
         status: "active",
-        public_identity_key: data.publicIdentityKey ? Buffer.from(data.publicIdentityKey, "base64") : null,
-        public_signed_prekey: data.publicSignedPrekey ? Buffer.from(data.publicSignedPrekey, "base64") : null,
-        signed_prekey_signature: data.signedPrekeySignature ? Buffer.from(data.signedPrekeySignature, "base64") : null,
+        public_identity_key: toHex(data.publicIdentityKey),
+        public_signed_prekey: toHex(data.publicSignedPrekey),
+        signed_prekey_signature: toHex(data.signedPrekeySignature),
         key_algorithm: data.keyAlgorithm ?? "curve25519",
         fingerprint: data.fingerprint ?? null,
       })
