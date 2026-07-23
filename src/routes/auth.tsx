@@ -220,9 +220,19 @@ function AuthPage() {
             </div>
 
             {error && (
-              <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </p>
+              <div role="alert" className="space-y-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <p>{error}</p>
+                {showResend && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={resendConfirmation}
+                    className="text-xs font-medium text-destructive underline underline-offset-4 hover:opacity-80 disabled:opacity-60"
+                  >
+                    Resend confirmation email
+                  </button>
+                )}
+              </div>
             )}
             {info && (
               <p className="rounded-lg bg-electric/10 px-3 py-2 text-sm text-muted-foreground">
