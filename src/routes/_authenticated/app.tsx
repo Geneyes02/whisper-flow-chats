@@ -97,11 +97,12 @@ function ChatApp() {
             Encrypted in transit &amp; at rest — end-to-end encryption coming in a follow-up
           </span>
           <Link
-            to="/_authenticated/settings"
+            to="/settings"
             className="rounded-md border border-input px-3 py-1.5 text-xs hover:bg-accent"
           >
             Settings
           </Link>
+
           <button
             onClick={signOut}
             className="rounded-md border border-input px-3 py-1.5 text-xs hover:bg-accent"
