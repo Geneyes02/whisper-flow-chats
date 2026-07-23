@@ -66,11 +66,11 @@ function Nav() {
 
         <nav className="hidden items-center gap-1 md:flex">
           {[
-            ["Product", "#features"],
+            ["Features", "#features"],
             ["Security", "#security"],
+            ["Compare", "#comparison"],
             ["Pricing", "#pricing"],
-            ["Developers", "#developers"],
-            ["Company", "#company"],
+            ["FAQ", "#faq"],
           ].map(([label, href]) => (
             <a
               key={label}
@@ -81,6 +81,7 @@ function Nav() {
             </a>
           ))}
         </nav>
+
 
         <div className="flex items-center gap-2">
           <Link
