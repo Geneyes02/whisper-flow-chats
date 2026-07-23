@@ -134,10 +134,22 @@
 }
 
 @utility glass {
-  background: color-mix(in oklab, var(--surface) 60%, transparent);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  background: color-mix(in oklab, var(--surface) 55%, transparent);
+  backdrop-filter: blur(24px) saturate(160%);
   border: 1px solid color-mix(in oklab, white 8%, transparent);
+}
+
+@utility glass-strong {
+  background: color-mix(in oklab, var(--surface-elevated) 72%, transparent);
+  backdrop-filter: blur(32px) saturate(180%);
+  border: 1px solid color-mix(in oklab, white 10%, transparent);
+}
+
+@utility ring-focus {
+  outline: none;
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--electric) 60%, transparent),
+    0 0 0 4px color-mix(in oklab, var(--electric) 18%, transparent);
 }
 
 @utility text-balance {
@@ -184,4 +196,38 @@
 
 @utility pulse-ring {
   animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+@utility rise-in {
+  animation: rise-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@utility fade-in {
+  animation: fade-in 400ms ease-out both;
+}
+
+@keyframes bubble-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
+@utility bubble-in {
+  animation: bubble-in 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@utility avatar-gradient {
+  background: linear-gradient(135deg,
+    color-mix(in oklab, var(--electric) 70%, black),
+    color-mix(in oklab, var(--electric) 30%, black));
+  color: var(--electric-foreground);
 }
