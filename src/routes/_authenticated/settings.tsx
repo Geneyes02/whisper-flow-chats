@@ -11,7 +11,7 @@ import {
   revokeSession,
 } from "@/lib/profile.functions";
 
-export const Route = createFileRoute("/_authenticated/app")({
+export const Route = createFileRoute("/_authenticated/settings")({
   component: AppHome,
   head: () => ({
     meta: [
