@@ -309,6 +309,42 @@ export const sendMessage = createServerFn({ method: "POST" })
     return { id: message.id, createdAt: message.created_at };
   });
 
+/** Convenience: send a plain-text chat message. Text is stored as bytea. */
+export const sendChatMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        conversationId: z.string().uuid(),
+        text: z.string().min(1).max(4000),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { supabase, userId } = context;
+    const ciphertext = "\\x" + Buffer.from(data.text, "utf8").toString("hex");
+    const { data: message, error } = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: data.conversationId,
+        sender_id: userId,
+        content_type: "text",
+        status: "sent",
+        ciphertext,
+        ciphertext_algorithm: "plaintext-transit",
+        ciphertext_version: 0,
+      })
+      .select("id, created_at")
+      .single();
+    if (error) throw error;
+    await supabase
+      .from("conversations")
+      .update({ last_message_at: message.created_at })
+      .eq("id", data.conversationId);
+    return { id: message.id as string, createdAt: message.created_at as string };
+  });
+
+
 export const reactToMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
