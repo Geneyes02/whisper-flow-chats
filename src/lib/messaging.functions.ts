@@ -58,9 +58,31 @@ export const listMyConversations = createServerFn({ method: "GET" })
 
     if (error) throw error;
 
-    return (memberships ?? [])
-      .filter((m) => m.conversations && (m.conversations as unknown as { deleted_at: string | null }).deleted_at === null)
-      .map((m): ConversationSummary => {
+    const active = (memberships ?? []).filter(
+      (m) => m.conversations && (m.conversations as unknown as { deleted_at: string | null }).deleted_at === null,
+    );
+
+    const convIds = active.map((m) => (m.conversations as unknown as { id: string }).id);
+
+    // fetch peer profiles for direct conversations
+    const peerByConv = new Map<string, { id: string; username: string | null; display_name: string | null; avatar_url: string | null }>();
+    if (convIds.length > 0) {
+      const { data: others } = await supabase
+        .from("conversation_members")
+        .select("conversation_id, user_id, profiles:profiles!conversation_members_user_id_fkey(id, username, display_name, avatar_url)")
+        .in("conversation_id", convIds)
+        .neq("user_id", userId)
+        .is("left_at", null);
+      for (const row of others ?? []) {
+        const p = row.profiles as unknown as { id: string; username: string | null; display_name: string | null; avatar_url: string | null } | null;
+        if (p && !peerByConv.has(row.conversation_id as string)) {
+          peerByConv.set(row.conversation_id as string, p);
+        }
+      }
+    }
+
+    return active
+      .map((m) => {
         const c = m.conversations as unknown as {
           id: string;
           type: "direct" | "group" | "channel";
@@ -69,6 +91,7 @@ export const listMyConversations = createServerFn({ method: "GET" })
           last_message_at: string | null;
           disappearing_seconds: number | null;
         };
+        const peer = peerByConv.get(c.id) ?? null;
         return {
           id: c.id,
           type: c.type,
@@ -81,9 +104,33 @@ export const listMyConversations = createServerFn({ method: "GET" })
           is_pinned: !!m.is_pinned,
           is_archived: !!m.is_archived,
           is_favorite: !!m.is_favorite,
+          peer,
         };
+      })
+      .sort((a, b) => {
+        const ta = a.last_message_at ? Date.parse(a.last_message_at) : 0;
+        const tb = b.last_message_at ? Date.parse(b.last_message_at) : 0;
+        return tb - ta;
       });
   });
+
+/** Decode a Postgres bytea (\x<hex> or raw string) into a UTF-8 string. */
+function decodeByteaText(v: unknown): string {
+  if (typeof v !== "string") return "";
+  if (v.startsWith("\\x")) {
+    try {
+      return Buffer.from(v.slice(2), "hex").toString("utf8");
+    } catch {
+      return "";
+    }
+  }
+  // fallback: some clients return base64
+  try {
+    return Buffer.from(v, "base64").toString("utf8");
+  } catch {
+    return v;
+  }
+}
 
 export const listMessages = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -100,7 +147,7 @@ export const listMessages = createServerFn({ method: "GET" })
     const { supabase } = context;
     let q = supabase
       .from("messages")
-      .select("id, sender_id, content_type, status, ciphertext, ciphertext_nonce, ciphertext_algorithm, has_attachments, reply_to_message_id, edited_at, created_at")
+      .select("id, sender_id, content_type, status, ciphertext, edited_at, created_at")
       .eq("conversation_id", data.conversationId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
@@ -110,8 +157,72 @@ export const listMessages = createServerFn({ method: "GET" })
 
     const { data: rows, error } = await q;
     if (error) throw error;
-    return rows ?? [];
+    return (rows ?? [])
+      .map((r) => ({
+        id: r.id as string,
+        sender_id: r.sender_id as string | null,
+        content_type: r.content_type as string,
+        status: r.status as string,
+        text: decodeByteaText(r.ciphertext),
+        edited_at: r.edited_at as string | null,
+        created_at: r.created_at as string,
+      }))
+      .reverse();
   });
+
+/** Create (or return existing) direct conversation with another user. */
+export const startDirectConversation = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({ otherUserId: z.string().uuid() }).parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { supabase, userId } = context;
+    if (data.otherUserId === userId) throw new Error("Cannot start a conversation with yourself.");
+
+    // Look for an existing direct conversation with exactly these two members.
+    const { data: mine } = await supabase
+      .from("conversation_members")
+      .select("conversation_id, conversations!inner(type, deleted_at)")
+      .eq("user_id", userId)
+      .is("left_at", null);
+    const myDirect = (mine ?? [])
+      .filter((m) => {
+        const c = m.conversations as unknown as { type: string; deleted_at: string | null };
+        return c.type === "direct" && c.deleted_at === null;
+      })
+      .map((m) => m.conversation_id as string);
+
+    if (myDirect.length > 0) {
+      const { data: theirs } = await supabase
+        .from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", data.otherUserId)
+        .in("conversation_id", myDirect)
+        .is("left_at", null);
+      const existing = theirs?.[0]?.conversation_id as string | undefined;
+      if (existing) return { id: existing, created: false };
+    }
+
+    // Privileged create: RLS blocks inserting a membership row for another user.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: conv, error: convErr } = await supabaseAdmin
+      .from("conversations")
+      .insert({ type: "direct", created_by: userId })
+      .select("id")
+      .single();
+    if (convErr) throw convErr;
+
+    const { error: memErr } = await supabaseAdmin.from("conversation_members").insert([
+      { conversation_id: conv.id, user_id: userId, role: "member" },
+      { conversation_id: conv.id, user_id: data.otherUserId, role: "member" },
+    ]);
+    if (memErr) throw memErr;
+
+    return { id: conv.id as string, created: true };
+  });
+
 
 /* -------------------------------------------------------------------------- */
 /*  Mutations                                                                 */
@@ -197,6 +308,42 @@ export const sendMessage = createServerFn({ method: "POST" })
 
     return { id: message.id, createdAt: message.created_at };
   });
+
+/** Convenience: send a plain-text chat message. Text is stored as bytea. */
+export const sendChatMessage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z
+      .object({
+        conversationId: z.string().uuid(),
+        text: z.string().min(1).max(4000),
+      })
+      .parse(input),
+  )
+  .handler(async ({ context, data }) => {
+    const { supabase, userId } = context;
+    const ciphertext = "\\x" + Buffer.from(data.text, "utf8").toString("hex");
+    const { data: message, error } = await supabase
+      .from("messages")
+      .insert({
+        conversation_id: data.conversationId,
+        sender_id: userId,
+        content_type: "text",
+        status: "sent",
+        ciphertext,
+        ciphertext_algorithm: "plaintext-transit",
+        ciphertext_version: 0,
+      })
+      .select("id, created_at")
+      .single();
+    if (error) throw error;
+    await supabase
+      .from("conversations")
+      .update({ last_message_at: message.created_at })
+      .eq("id", data.conversationId);
+    return { id: message.id as string, createdAt: message.created_at as string };
+  });
+
 
 export const reactToMessage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
