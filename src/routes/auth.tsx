@@ -30,6 +30,7 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [showResend, setShowResend] = useState(false);
 
   // If already signed in, bounce to /app.
   useEffect(() => {
@@ -38,10 +39,34 @@ function AuthPage() {
     });
   }, [navigate, redirectTo]);
 
+  function friendly(err: unknown): string {
+    const raw = err instanceof Error ? err.message : String(err);
+    const code =
+      typeof err === "object" && err && "code" in err ? String((err as { code: unknown }).code) : "";
+    if (code === "email_not_confirmed" || /not confirmed/i.test(raw)) {
+      setShowResend(true);
+      return "Please confirm your email first — check your inbox for the link.";
+    }
+    if (code === "invalid_credentials" || /invalid.*(login|credentials|password)/i.test(raw)) {
+      return "That email and password don’t match.";
+    }
+    if (code === "user_already_exists" || /already registered|already exists/i.test(raw)) {
+      return "An account already exists with this email. Try signing in.";
+    }
+    if (code === "weak_password" || /weak/i.test(raw)) {
+      return "This password is too common. Pick something stronger.";
+    }
+    if (code === "over_email_send_rate_limit" || /rate limit/i.test(raw)) {
+      return "Too many attempts — please wait a minute and try again.";
+    }
+    return raw || "Something went wrong.";
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setInfo(null);
+    setShowResend(false);
     const emailParse = emailSchema.safeParse(email);
     if (!emailParse.success) return setError("Please enter a valid email address.");
     const pwParse = passwordSchema.safeParse(password);
@@ -64,7 +89,30 @@ function AuthPage() {
         navigate({ to: redirectTo ?? "/app", replace: true });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setError(friendly(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendConfirmation() {
+    setError(null);
+    setInfo(null);
+    if (!emailSchema.safeParse(email).success) {
+      return setError("Enter your email address above, then tap resend.");
+    }
+    setBusy(true);
+    try {
+      const { error: err } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/app` },
+      });
+      if (err) throw err;
+      setInfo("Confirmation email sent. Check your inbox.");
+      setShowResend(false);
+    } catch (err) {
+      setError(friendly(err));
     } finally {
       setBusy(false);
     }
@@ -81,7 +129,7 @@ function AuthPage() {
       // If we came back with tokens (popup flow), navigate onward.
       if (!result.redirected) navigate({ to: redirectTo ?? "/app", replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign-in failed.");
+      setError(friendly(err));
     } finally {
       setBusy(false);
     }
