@@ -156,7 +156,7 @@ function Hero() {
             className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-white/[0.03] px-3 py-1 text-xs text-muted-foreground backdrop-blur transition-colors hover:bg-white/[0.06] hover:text-foreground"
           >
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-electric pulse-ring" />
-            End-to-end encryption, by design
+            Private by design — real-time, end-to-end capable
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 18l6-6-6-6" />
             </svg>
@@ -260,7 +260,7 @@ function HeroDeviceMock() {
                 <div className="truncate text-sm font-medium">Design Studio</div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  4 online · end-to-end encrypted
+                  4 online · real-time
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-1 text-muted-foreground">
