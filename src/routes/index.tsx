@@ -659,10 +659,11 @@ function SecuritySection() {
             <p className="mt-4 max-w-lg text-lg text-muted-foreground">
               Whispr is designed so that privacy isn't a marketing checkbox — it's a property of the system.
             </p>
-            <a href="#" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-electric hover:underline">
+            <a href="#faq" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-electric hover:underline">
               Read the security overview
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
             </a>
+
           </div>
 
           <ul className="space-y-3">
