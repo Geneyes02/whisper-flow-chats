@@ -65,7 +65,7 @@ function SettingsPage() {
   });
 
   const profileMut = useMutation({
-    mutationFn: () => {
+    mutationFn: async (): Promise<{ ok: boolean; noop?: boolean }> => {
       // Only send fields the user actually changed. Empty strings collapse to
       // `null` for nullable columns; display_name is required so we ignore
       // an empty value instead of clearing it.
@@ -77,8 +77,8 @@ function SettingsPage() {
       if (nextName && nextName !== (profile?.display_name ?? "")) patch.display_name = nextName;
       const nextBio = bio.trim();
       if (nextBio !== (profile?.bio ?? "")) patch.bio = nextBio.length ? nextBio : null;
-      if (Object.keys(patch).length === 0) return Promise.resolve({ ok: true, noop: true });
-      return updateProfile({ data: patch });
+      if (Object.keys(patch).length === 0) return { ok: true, noop: true };
+      return await updateProfile({ data: patch });
     },
     onSuccess: (r) => {
       if ("noop" in r) setFlash({ kind: "ok", msg: "Nothing to save." });
