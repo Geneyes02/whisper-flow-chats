@@ -748,7 +748,8 @@ function Comparison() {
   ] as const;
 
   return (
-    <section className="py-28">
+    <section id="comparison" className="py-28">
+
       <div className="mx-auto max-w-5xl px-6">
         <SectionEyebrow>How we compare</SectionEyebrow>
         <h2 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.02em]">
