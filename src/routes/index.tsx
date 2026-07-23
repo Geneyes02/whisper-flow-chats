@@ -260,7 +260,7 @@ function HeroDeviceMock() {
                 <div className="truncate text-sm font-medium">Design Studio</div>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  4 online · end-to-end encrypted
+                  4 online · real-time
                 </div>
               </div>
               <div className="ml-auto flex items-center gap-1 text-muted-foreground">
