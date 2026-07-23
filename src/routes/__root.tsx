@@ -81,7 +81,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Whispr is a privacy-first communication platform. Fast, beautiful, reliable messaging, calls and communities.",
+          "Whispr is a privacy-first communication platform for messaging, calls, and communities. Fast, beautiful, reliable — designed with craft.",
       },
       { name: "author", content: "Whispr" },
       { name: "theme-color", content: "#0a0a0b" },
@@ -89,11 +89,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         property: "og:description",
         content:
-          "Privacy-first messaging, calls and communities. Designed with craft.",
+          "Whispr is a privacy-first communication platform for messaging, calls, and communities. Fast, beautiful, reliable — designed with craft.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@whispr" },
+      { name: "twitter:title", content: "Whispr — Private messaging, beautifully done" },
+      { name: "twitter:description", content: "Whispr is a privacy-first communication platform for messaging, calls, and communities. Fast, beautiful, reliable — designed with craft." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/69699d2d-c586-4b30-b74d-8aa240549b5e" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/69699d2d-c586-4b30-b74d-8aa240549b5e" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -103,7 +107,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700;800&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500&display=swap",
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
   shellComponent: RootShell,
