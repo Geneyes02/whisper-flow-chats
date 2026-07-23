@@ -83,21 +83,22 @@ function Nav() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <a
-            href="#signin"
+          <Link
+            to="/auth"
             className="hidden rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground sm:block"
           >
             Sign in
-          </a>
-          <a
-            href="#download"
+          </Link>
+          <Link
+            to="/auth"
+            search={{ mode: "signup" }}
             className="group relative inline-flex items-center gap-1.5 rounded-full bg-foreground px-3.5 py-1.5 text-sm font-medium text-background transition-transform active:scale-[0.97]"
           >
-            Download
+            Get started
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M5 12h14M13 5l7 7-7 7"/>
             </svg>
-          </a>
+          </Link>
         </div>
       </div>
     </header>
