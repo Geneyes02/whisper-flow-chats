@@ -861,15 +861,31 @@ function Pricing() {
                   </li>
                 ))}
               </ul>
-              <button
-                className={`mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium transition-transform active:scale-[0.98] ${
-                  t.featured
-                    ? "bg-electric text-electric-foreground hover:brightness-110"
-                    : "border border-border bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
-                }`}
-              >
-                {t.cta}
-              </button>
+              {t.cta === "Contact sales" ? (
+                <a
+                  href="mailto:sales@whispr.app?subject=Whispr%20Enterprise"
+                  className={`mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium transition-transform active:scale-[0.98] ${
+                    t.featured
+                      ? "bg-electric text-electric-foreground hover:brightness-110"
+                      : "border border-border bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+                  }`}
+                >
+                  {t.cta}
+                </a>
+              ) : (
+                <Link
+                  to="/auth"
+                  search={{ mode: "signup" }}
+                  className={`mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium transition-transform active:scale-[0.98] ${
+                    t.featured
+                      ? "bg-electric text-electric-foreground hover:brightness-110"
+                      : "border border-border bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+                  }`}
+                >
+                  {t.cta}
+                </Link>
+              )}
+
             </div>
           ))}
         </div>
