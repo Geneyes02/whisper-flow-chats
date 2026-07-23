@@ -30,6 +30,7 @@ function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [showResend, setShowResend] = useState(false);
 
   // If already signed in, bounce to /app.
   useEffect(() => {
@@ -38,10 +39,34 @@ function AuthPage() {
     });
   }, [navigate, redirectTo]);
 
+  function friendly(err: unknown): string {
+    const raw = err instanceof Error ? err.message : String(err);
+    const code =
+      typeof err === "object" && err && "code" in err ? String((err as { code: unknown }).code) : "";
+    if (code === "email_not_confirmed" || /not confirmed/i.test(raw)) {
+      setShowResend(true);
+      return "Please confirm your email first — check your inbox for the link.";
+    }
+    if (code === "invalid_credentials" || /invalid.*(login|credentials|password)/i.test(raw)) {
+      return "That email and password don’t match.";
+    }
+    if (code === "user_already_exists" || /already registered|already exists/i.test(raw)) {
+      return "An account already exists with this email. Try signing in.";
+    }
+    if (code === "weak_password" || /weak/i.test(raw)) {
+      return "This password is too common. Pick something stronger.";
+    }
+    if (code === "over_email_send_rate_limit" || /rate limit/i.test(raw)) {
+      return "Too many attempts — please wait a minute and try again.";
+    }
+    return raw || "Something went wrong.";
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setInfo(null);
+    setShowResend(false);
     const emailParse = emailSchema.safeParse(email);
     if (!emailParse.success) return setError("Please enter a valid email address.");
     const pwParse = passwordSchema.safeParse(password);
@@ -64,7 +89,30 @@ function AuthPage() {
         navigate({ to: redirectTo ?? "/app", replace: true });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setError(friendly(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendConfirmation() {
+    setError(null);
+    setInfo(null);
+    if (!emailSchema.safeParse(email).success) {
+      return setError("Enter your email address above, then tap resend.");
+    }
+    setBusy(true);
+    try {
+      const { error: err } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/app` },
+      });
+      if (err) throw err;
+      setInfo("Confirmation email sent. Check your inbox.");
+      setShowResend(false);
+    } catch (err) {
+      setError(friendly(err));
     } finally {
       setBusy(false);
     }
@@ -81,7 +129,7 @@ function AuthPage() {
       // If we came back with tokens (popup flow), navigate onward.
       if (!result.redirected) navigate({ to: redirectTo ?? "/app", replace: true });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign-in failed.");
+      setError(friendly(err));
     } finally {
       setBusy(false);
     }
@@ -128,7 +176,10 @@ function AuthPage() {
             className="group mt-6 flex w-full items-center justify-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium transition-all hover:bg-white/[0.08] hover:border-white/20 disabled:opacity-60"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden>
-              <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.24 1.5-1.7 4.4-5.5 4.4-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 3.9 14.6 3 12 3 6.9 3 2.8 7.1 2.8 12.2S6.9 21.4 12 21.4c6.9 0 9.5-4.8 9.5-8.9 0-.6-.1-1.1-.2-1.6H12z"/>
+              <path fill="#4285F4" d="M21.35 11.1H12v3.9h5.35c-.5 2.4-2.55 3.7-5.35 3.7-3.25 0-5.9-2.65-5.9-5.9s2.65-5.9 5.9-5.9c1.55 0 2.9.55 3.95 1.5l2.7-2.7C16.95 4.15 14.65 3.1 12 3.1 6.9 3.1 2.8 7.2 2.8 12.3s4.1 9.2 9.2 9.2c5.3 0 8.85-3.7 8.85-8.9 0-.6-.05-1.05-.15-1.5z"/>
+              <path fill="#34A853" d="M3.7 7.55l3.2 2.35c.9-2.15 3-3.55 5.35-3.55 1.55 0 2.9.55 3.95 1.5l2.7-2.7C16.95 3.6 14.65 2.55 12 2.55c-3.6 0-6.7 2.05-8.3 5z"/>
+              <path fill="#FBBC05" d="M12 21.5c2.6 0 4.9-.85 6.55-2.3l-3.05-2.55c-.85.6-2 .95-3.5.95-2.8 0-5.15-1.85-5.95-4.4L3.55 15.6C5.15 19.05 8.3 21.5 12 21.5z"/>
+              <path fill="#EA4335" d="M21.35 11.1H12v3.9h5.35c-.25 1.25-1 2.3-2.05 3.05l3.05 2.55c1.75-1.6 2.85-4 2.85-6.9 0-.6-.05-1.05-.15-1.5z"/>
             </svg>
             Continue with Google
           </button>
@@ -169,9 +220,19 @@ function AuthPage() {
             </div>
 
             {error && (
-              <p role="alert" className="rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                {error}
-              </p>
+              <div role="alert" className="space-y-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <p>{error}</p>
+                {showResend && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={resendConfirmation}
+                    className="text-xs font-medium text-destructive underline underline-offset-4 hover:opacity-80 disabled:opacity-60"
+                  >
+                    Resend confirmation email
+                  </button>
+                )}
+              </div>
             )}
             {info && (
               <p className="rounded-lg bg-electric/10 px-3 py-2 text-sm text-muted-foreground">
