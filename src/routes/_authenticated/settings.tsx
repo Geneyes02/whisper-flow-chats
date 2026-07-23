@@ -81,7 +81,7 @@ function SettingsPage() {
       return await updateProfile({ data: patch });
     },
     onSuccess: (r) => {
-      if ("noop" in r) setFlash({ kind: "ok", msg: "Nothing to save." });
+      if (r.noop) setFlash({ kind: "ok", msg: "Nothing to save." });
       else {
         setFlash({ kind: "ok", msg: "Profile saved." });
         qc.invalidateQueries({ queryKey: ["me"] });
