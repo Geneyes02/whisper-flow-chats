@@ -1,0 +1,83 @@
+name: promote native OpenMLS direct messaging
+
+on:
+  pull_request:
+    paths:
+      - "desktop/src-tauri/crypto-host/**"
+      - "src/lib/crypto/libsignal-bridge.ts"
+      - ".github/workflows/promote-native-openmls.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install native dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev >/dev/null
+      - name: Rust formatting
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo fmt --all -- --check
+      - name: Strict OpenMLS clippy
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings
+      - name: Full OpenMLS + local-seal tests
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo test --no-default-features --features backend-openmls -- --nocapture
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
+      - name: TypeScript contract
+        run: bun x tsc --noEmit
+      - name: Promote production desktop backend + capability
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          cargo = Path('desktop/src-tauri/Cargo.toml')
+          s = cargo.read_text()
+          old = 'whispr-crypto-host = { path = "crypto-host", default-features = false, features = ["backend-stub"] }'
+          new = 'whispr-crypto-host = { path = "crypto-host", default-features = false, features = ["backend-openmls"] }'
+          if old in s:
+              s = s.replace(old, new, 1)
+              cargo.write_text(s)
+          elif new not in s:
+              raise SystemExit('desktop backend dependency is neither stub nor OpenMLS expected shape')
+
+          bridge = Path('src/lib/crypto/libsignal-bridge.ts')
+          s = bridge.read_text()
+          if 'supportsOneOnOne: false' in s:
+              s = s.replace('supportsOneOnOne: false', 'supportsOneOnOne: true', 1)
+              bridge.write_text(s)
+          elif 'supportsOneOnOne: true' not in s:
+              raise SystemExit('native capability flag not found')
+          PY
+      - name: Verify promoted TypeScript
+        run: bun x prettier --write src/lib/crypto/libsignal-bridge.ts && bun x tsc --noEmit
+      - name: Verify promoted desktop dependency resolves
+        working-directory: desktop/src-tauri
+        run: cargo check
+      - name: Commit promotion
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "native OpenMLS already promoted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop/src-tauri/Cargo.toml src/lib/crypto/libsignal-bridge.ts
+          git commit -m "feat(e2ee): promote OpenMLS as native direct-message backend"
+          git push origin HEAD:${{ github.head_ref }}
