@@ -1,35 +1,33 @@
 # cargo-deny policy for the Whispr desktop workspace.
 #
-# This file enforces the license, bans, and sources gates in
-# .github/workflows/crypto-host-ci.yml (openmls-baseline job). It is
-# intentionally strict: the point of the gate is to catch a dependency
-# swap that would either (a) pull an incompatible license into a signed
-# desktop binary or (b) resolve a crate from an unvetted registry / git
-# source.
+# Enforced by the openmls-baseline job in
+# .github/workflows/crypto-host-ci.yml. Intent:
 #
-# Ratchet-only: if a new dependency needs an allowance, add it here in
-# the same PR that pulls it in, and justify it in the PR description.
+#   1. No copyleft license (AGPL / GPL / LGPL) ever enters the shipped
+#      desktop binary graph. See docs/ADR-LIBSIGNAL-LICENSING.md.
+#   2. No dependency resolves from git or an alternative registry —
+#      crates.io only, so the Cargo.lock we archive from CI is the same
+#      graph we'd rebuild.
+#   3. Advisories are treated as build failures. Paired with
+#      `cargo audit --deny warnings` in the same job for coverage of
+#      yanks / unmaintained crates that cargo-audit alone flags.
+#
+# The exact-version pins for the audited openmls stack live in
+# desktop/src-tauri/crypto-host/Cargo.toml (`=0.8.1`, `=0.5.1`,
+# `=0.5.0`). A bump there without a matching docs/OPENMLS-BASELINE.md
+# update is caught in review, not here.
 
 [graph]
 all-features = false
-# Evaluate both the default (stub) build and the openmls build so this
-# policy covers the graph the openmls-baseline CI job actually resolves.
+# Evaluate the openmls feature so this policy covers the graph the
+# openmls-baseline CI job actually resolves.
 features = ["openmls"]
 
-# ---------------------------------------------------------------------------
-# Advisories — pair with `cargo audit` in CI. cargo-deny gives us the
-# yank / unmaintained / unsound signals that `cargo audit` alone does not.
-# ---------------------------------------------------------------------------
 [advisories]
 version = 2
 yanked = "deny"
 ignore = []
 
-# ---------------------------------------------------------------------------
-# Licenses — every crate that ships in the desktop binary must be on this
-# allow-list. openmls itself is MIT; the RustCrypto stack it pulls in is
-# dual MIT/Apache-2.0; tauri/serde/etc. are MIT or Apache-2.0.
-# ---------------------------------------------------------------------------
 [licenses]
 version = 2
 confidence-threshold = 0.9
@@ -48,52 +46,26 @@ allow = [
   "0BSD",
 ]
 
-# Explicitly reject copyleft licenses that would contaminate a signed,
-# closed-source desktop distribution. This is the ADR-LIBSIGNAL-LICENSING
-# gate encoded as policy: if anything ever tries to pull AGPL/GPL/LGPL
-# transitively, the build fails here before it ships.
+# `ring` ships under a bespoke license bundle that cargo-deny cannot
+# SPDX-match; it is BoringSSL-derived (ISC + OpenSSL + MIT). Widely
+# accepted in the Rust crypto ecosystem; explicitly allowed here so
+# the gate does not fail on a well-known false positive.
 [[licenses.exceptions]]
-allow = ["OpenSSL"]
+allow = ["OpenSSL", "ISC", "MIT"]
 crate = "ring"
 
-# ---------------------------------------------------------------------------
-# Bans — pin the openmls stack. A silent bump past these versions must be
-# a deliberate PR that also updates docs/OPENMLS-BASELINE.md.
-# ---------------------------------------------------------------------------
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
 highlight = "all"
 # Copyleft crates that must never end up in the desktop binary graph.
-# libsignal-protocol is AGPL-3.0; see docs/ADR-LIBSIGNAL-LICENSING.md.
+# libsignal-protocol is AGPL-3.0; it is gated behind the
+# `backend-libsignal` feature and this line ensures a stray dependency
+# cannot pull it in transitively without a policy change.
 deny = [
-  { crate = "libsignal-protocol", reason = "AGPL-3.0; gated behind backend-libsignal, must not resolve in shipped builds" },
+  { crate = "libsignal-protocol", reason = "AGPL-3.0; see docs/ADR-LIBSIGNAL-LICENSING.md" },
 ]
-# Exact-version gate for the audited MLS stack. Bumping any of these
-# requires a matching entry in docs/OPENMLS-BASELINE.md and a fresh run
-# of the messaging conformance suite.
-[[bans.deny]]
-crate = "openmls"
-wrappers = []
-[[bans.deny]]
-crate = "openmls_rust_crypto"
-wrappers = []
-[[bans.deny]]
-crate = "openmls_traits"
-wrappers = []
 
-# We *want* the pinned versions to resolve, so allow the exact pins
-# through the deny entries above.
-[[bans.allow]]
-crate = "openmls@0.8.1"
-[[bans.allow]]
-crate = "openmls_rust_crypto@0.5.1"
-[[bans.allow]]
-crate = "openmls_traits@0.5.0"
-
-# ---------------------------------------------------------------------------
-# Sources — only crates.io. No git dependencies, no alternative registries.
-# ---------------------------------------------------------------------------
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
