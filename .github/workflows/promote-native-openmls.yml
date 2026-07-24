@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "desktop/src-tauri/crypto-host/**"
+      - "desktop/src-tauri/Cargo.toml"
       - "src/lib/crypto/libsignal-bridge.ts"
       - ".github/workflows/promote-native-openmls.yml"
   workflow_dispatch:
@@ -25,8 +26,23 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - name: Install native dependencies
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev >/dev/null
+      - name: Install native + Tauri Linux dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf \
+            libdbus-1-dev \
+            libsecret-1-dev >/dev/null
       - name: Rust formatting
         working-directory: desktop/src-tauri/crypto-host
         run: cargo fmt --all -- --check
@@ -68,8 +84,22 @@ jobs:
         run: bun x prettier --write src/lib/crypto/libsignal-bridge.ts && bun x tsc --noEmit
       - name: Verify promoted desktop dependency resolves
         working-directory: desktop/src-tauri
-        run: cargo check
+        shell: bash
+        run: |
+          set +e
+          cargo check > /tmp/promoted-desktop-check.log 2>&1
+          status=$?
+          tail -n 200 /tmp/promoted-desktop-check.log
+          exit $status
+      - name: Upload promoted desktop build diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: promoted-desktop-build-diagnostic
+          path: /tmp/promoted-desktop-check.log
+          if-no-files-found: warn
       - name: Commit promotion
+        if: success()
         shell: bash
         run: |
           if git diff --quiet; then
