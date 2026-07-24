@@ -37,11 +37,34 @@ jobs:
         run: cargo fmt --all
       - name: Strict crypto-host clippy
         working-directory: desktop/src-tauri/crypto-host
-        run: cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings
+        shell: bash
+        run: |
+          set +e
+          cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings > /tmp/harden-clippy.log 2>&1
+          status=$?
+          tail -n 160 /tmp/harden-clippy.log
+          exit $status
       - name: OpenMLS runtime tests
+        if: success()
         working-directory: desktop/src-tauri/crypto-host
-        run: cargo test --no-default-features --features backend-openmls -- --nocapture
+        shell: bash
+        run: |
+          set +e
+          cargo test --no-default-features --features backend-openmls -- --nocapture > /tmp/harden-tests.log 2>&1
+          status=$?
+          tail -n 220 /tmp/harden-tests.log
+          exit $status
+      - name: Upload hardening diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmls-hardening-diagnostics
+          path: |
+            /tmp/harden-clippy.log
+            /tmp/harden-tests.log
+          if-no-files-found: warn
       - name: Commit verified hardening if changed
+        if: success()
         shell: bash
         run: |
           if git diff --quiet; then
