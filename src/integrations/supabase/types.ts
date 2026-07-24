@@ -384,6 +384,50 @@ export type Database = {
         }
         Relationships: []
       }
+      conversation_invites: {
+        Row: {
+          code: string
+          conversation_id: string
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          max_uses: number | null
+          revoked_at: string | null
+          uses: number
+        }
+        Insert: {
+          code: string
+          conversation_id: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          max_uses?: number | null
+          revoked_at?: string | null
+          uses?: number
+        }
+        Update: {
+          code?: string
+          conversation_id?: string
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          max_uses?: number | null
+          revoked_at?: string | null
+          uses?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversation_invites_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_members: {
         Row: {
           conversation_id: string
@@ -745,6 +789,8 @@ export type Database = {
           deleted_at: string | null
           edited_at: string | null
           expires_at: string | null
+          forwarded_from_conversation_id: string | null
+          forwarded_from_message_id: string | null
           has_attachments: boolean
           id: string
           is_pinned: boolean
@@ -768,6 +814,8 @@ export type Database = {
           deleted_at?: string | null
           edited_at?: string | null
           expires_at?: string | null
+          forwarded_from_conversation_id?: string | null
+          forwarded_from_message_id?: string | null
           has_attachments?: boolean
           id?: string
           is_pinned?: boolean
@@ -791,6 +839,8 @@ export type Database = {
           deleted_at?: string | null
           edited_at?: string | null
           expires_at?: string | null
+          forwarded_from_conversation_id?: string | null
+          forwarded_from_message_id?: string | null
           has_attachments?: boolean
           id?: string
           is_pinned?: boolean
@@ -809,6 +859,20 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_forwarded_from_conversation_id_fkey"
+            columns: ["forwarded_from_conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_forwarded_from_message_id_fkey"
+            columns: ["forwarded_from_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
           {
@@ -885,6 +949,36 @@ export type Database = {
           status_text?: string | null
           updated_at?: string
           username?: string | null
+        }
+        Relationships: []
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          user_agent?: string | null
+          user_id?: string
         }
         Relationships: []
       }
