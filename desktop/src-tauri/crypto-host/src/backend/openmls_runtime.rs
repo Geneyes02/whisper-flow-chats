@@ -16,9 +16,8 @@ use std::{collections::HashMap, sync::Arc};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use openmls::prelude::{
     BasicCredential, Ciphersuite, CredentialType, CredentialWithKey, GroupId, KeyPackage,
-    KeyPackageIn, LeafNodeParameters, Lifetime, MlsGroup, MlsGroupCreateConfig,
-    MlsGroupJoinConfig, MlsMessageBodyIn, MlsMessageIn, ProcessedMessageContent,
-    ProtocolVersion, StagedWelcome,
+    KeyPackageIn, LeafNodeParameters, Lifetime, MlsGroup, MlsGroupCreateConfig, MlsGroupJoinConfig,
+    MlsMessageBodyIn, MlsMessageIn, ProcessedMessageContent, ProtocolVersion, StagedWelcome,
 };
 use openmls_basic_credential::SignatureKeyPair;
 use openmls_rust_crypto::OpenMlsRustCrypto;
@@ -41,8 +40,7 @@ pub const OPENMLS_RUNTIME_BACKEND: &str = "openmls-runtime-v1";
 pub const WHISPR_MLS_PROFILE: &str = "whispr-mls-v1";
 pub const WHISPR_CIPHERSUITE: Ciphersuite =
     Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
-pub const WHISPR_CIPHERSUITE_TAG: &str =
-    "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519";
+pub const WHISPR_CIPHERSUITE_TAG: &str = "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519";
 
 const KEYPACKAGE_LIFETIME_SECS: u64 = 60 * 60 * 24 * 90;
 const MAX_PREKEYS: u32 = 200;
@@ -101,11 +99,13 @@ pub struct OpenMlsRuntimeBackend {
 
 impl OpenMlsRuntimeBackend {
     pub fn new(store: Arc<dyn SecureStore>) -> Result<Self> {
-        let identity = match Snapshot::load(&*store, Slot::DeviceIdentity, OPENMLS_RUNTIME_BACKEND)? {
+        let identity = match Snapshot::load(&*store, Slot::DeviceIdentity, OPENMLS_RUNTIME_BACKEND)?
+        {
             Some(snapshot) => {
-                let id: PersistedIdentity = serde_json::from_str(&snapshot.payload).map_err(|_| {
-                    CryptoError::new(CryptoErrorCode::StorageCorrupt, "identity payload")
-                })?;
+                let id: PersistedIdentity =
+                    serde_json::from_str(&snapshot.payload).map_err(|_| {
+                        CryptoError::new(CryptoErrorCode::StorageCorrupt, "identity payload")
+                    })?;
                 if id.ciphersuite_tag != WHISPR_CIPHERSUITE_TAG {
                     return Err(CryptoError::new(
                         CryptoErrorCode::StorageCorrupt,
@@ -162,17 +162,13 @@ impl OpenMlsRuntimeBackend {
     fn signer(&self, id: &PersistedIdentity) -> Result<SignatureKeyPair> {
         let public = decode_b64(&id.signature_public_b64)
             .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "signature public"))?;
-        SignatureKeyPair::read(
-            self.provider.storage(),
-            &public,
-            SignatureScheme::ED25519,
-        )
-        .ok_or_else(|| {
-            CryptoError::new(
-                CryptoErrorCode::StorageCorrupt,
-                "signature key missing from provider state",
-            )
-        })
+        SignatureKeyPair::read(self.provider.storage(), &public, SignatureScheme::ED25519)
+            .ok_or_else(|| {
+                CryptoError::new(
+                    CryptoErrorCode::StorageCorrupt,
+                    "signature key missing from provider state",
+                )
+            })
     }
 
     fn credential_with_key(&self, id: &PersistedIdentity) -> Result<CredentialWithKey> {
@@ -203,9 +199,8 @@ impl OpenMlsRuntimeBackend {
         for (key_b64, value_b64) in snapshot.provider_entries {
             let key = decode_b64(&key_b64)
                 .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "provider key"))?;
-            let value = decode_b64(&value_b64).map_err(|_| {
-                CryptoError::new(CryptoErrorCode::StorageCorrupt, "provider value")
-            })?;
+            let value = decode_b64(&value_b64)
+                .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "provider value"))?;
             values.insert(key, value);
         }
         Ok(())
@@ -291,9 +286,7 @@ impl OpenMlsRuntimeBackend {
         let expected_signature_key = decode_b64(&peer.identity_public_key).map_err(|_| {
             CryptoError::new(CryptoErrorCode::InvalidBundle, "identity key encoding")
         })?;
-        if key_package.leaf_node().signature_key().as_slice()
-            != expected_signature_key.as_slice()
-        {
+        if key_package.leaf_node().signature_key().as_slice() != expected_signature_key.as_slice() {
             return Err(CryptoError::new(
                 CryptoErrorCode::IdentityMismatch,
                 "keypackage signature key mismatch",
@@ -316,10 +309,7 @@ impl OpenMlsRuntimeBackend {
         .map_err(|_| CryptoError::internal("bound aad serialize"))
     }
 
-    fn validate_bound_aad(
-        envelope: &EncryptedEnvelope,
-        processed_aad: &[u8],
-    ) -> Result<Vec<u8>> {
+    fn validate_bound_aad(envelope: &EncryptedEnvelope, processed_aad: &[u8]) -> Result<Vec<u8>> {
         let bound: BoundAad = serde_json::from_slice(processed_aad)
             .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "bound aad parse"))?;
         if bound.sender_device_id != envelope.sender_device_id
@@ -386,8 +376,8 @@ impl OpenMlsRuntimeBackend {
             .build();
         let staged = StagedWelcome::new_from_welcome(&self.provider, &join_config, welcome, None)
             .map_err(|_| {
-                CryptoError::new(CryptoErrorCode::BadCiphertext, "welcome validation")
-            })?;
+            CryptoError::new(CryptoErrorCode::BadCiphertext, "welcome validation")
+        })?;
         let group = staged
             .into_group(&self.provider)
             .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "welcome join"))?;
@@ -696,8 +686,9 @@ impl CryptoBackend for OpenMlsRuntimeBackend {
             let welcome_b64 = frame.welcome_b64.as_deref().ok_or_else(|| {
                 CryptoError::new(CryptoErrorCode::NoSession, "missing first-contact welcome")
             })?;
-            let welcome_bytes = decode_b64(welcome_b64)
-                .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "welcome encoding"))?;
+            let welcome_bytes = decode_b64(welcome_b64).map_err(|_| {
+                CryptoError::new(CryptoErrorCode::BadCiphertext, "welcome encoding")
+            })?;
             self.accept_welcome(&envelope.sender_device_id, &welcome_bytes)?;
         }
 
@@ -713,9 +704,9 @@ impl CryptoBackend for OpenMlsRuntimeBackend {
         })?;
         let message = MlsMessageIn::tls_deserialize_exact(application_bytes)
             .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "application parse"))?;
-        let protocol = message.try_into_protocol_message().map_err(|_| {
-            CryptoError::new(CryptoErrorCode::BadCiphertext, "application type")
-        })?;
+        let protocol = message
+            .try_into_protocol_message()
+            .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "application type"))?;
         let processed = group
             .process_message(&self.provider, protocol)
             .map_err(|_| {
@@ -893,7 +884,9 @@ mod tests {
     #[test]
     fn rt_first_contact_and_reply() {
         let (_alice_store, _bob_store, alice, bob, alice_id, bob_id) = pair();
-        alice.establish_session(bob.publish_prekeys(4).unwrap()).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(4).unwrap())
+            .unwrap();
         let envelope = alice
             .encrypt(&bob_id.device_id, b"hello bob", &aad(1))
             .unwrap();
@@ -909,7 +902,9 @@ mod tests {
     #[test]
     fn rt_restart_restores_group_and_ratchet_state() {
         let (alice_store, bob_store, alice, bob, alice_id, bob_id) = pair();
-        alice.establish_session(bob.publish_prekeys(2).unwrap()).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(2).unwrap())
+            .unwrap();
         let first = alice.encrypt(&bob_id.device_id, b"one", &aad(1)).unwrap();
         assert_eq!(bob.decrypt(&first).unwrap(), b"one");
         drop(alice);
@@ -924,7 +919,9 @@ mod tests {
     #[test]
     fn rt_replay_tamper_and_routing_rewrite_fail_closed() {
         let (_alice_store, _bob_store, alice, bob, _alice_id, bob_id) = pair();
-        alice.establish_session(bob.publish_prekeys(2).unwrap()).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(2).unwrap())
+            .unwrap();
         let envelope = alice
             .encrypt(&bob_id.device_id, b"secret sentinel", &aad(10))
             .unwrap();
@@ -959,16 +956,16 @@ mod tests {
     #[test]
     fn rt_rotation_commit_is_delivered_before_application_message() {
         let (_alice_store, _bob_store, alice, bob, alice_id, bob_id) = pair();
-        alice.establish_session(bob.publish_prekeys(2).unwrap()).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(2).unwrap())
+            .unwrap();
         let first = alice
             .encrypt(&bob_id.device_id, b"before", &aad(1))
             .unwrap();
         bob.decrypt(&first).unwrap();
 
         alice.rotate_session(&bob_id.device_id).unwrap();
-        let after = alice
-            .encrypt(&bob_id.device_id, b"after", &aad(2))
-            .unwrap();
+        let after = alice.encrypt(&bob_id.device_id, b"after", &aad(2)).unwrap();
         assert_eq!(bob.decrypt(&after).unwrap(), b"after");
         let reply = bob
             .encrypt(&alice_id.device_id, b"still synced", &aad(3))
@@ -979,7 +976,9 @@ mod tests {
     #[test]
     fn rt_1000_sequential_messages() {
         let (_alice_store, _bob_store, alice, bob, _alice_id, bob_id) = pair();
-        alice.establish_session(bob.publish_prekeys(2).unwrap()).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(2).unwrap())
+            .unwrap();
         for index in 0..1000usize {
             let plaintext = format!("message-{index}");
             let envelope = alice
@@ -992,12 +991,20 @@ mod tests {
     #[test]
     fn rt_server_visible_envelope_does_not_contain_plaintext() {
         let (_alice_store, _bob_store, alice, bob, _alice_id, bob_id) = pair();
-        alice.establish_session(bob.publish_prekeys(2).unwrap()).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(2).unwrap())
+            .unwrap();
         let sentinel = b"WHISPR-SERVER-BLINDNESS-SENTINEL-7b6ac1";
-        let envelope = alice.encrypt(&bob_id.device_id, sentinel, &aad(77)).unwrap();
+        let envelope = alice
+            .encrypt(&bob_id.device_id, sentinel, &aad(77))
+            .unwrap();
         let json = serde_json::to_vec(&envelope).unwrap();
-        assert!(!json.windows(sentinel.len()).any(|window| window == sentinel));
+        assert!(!json
+            .windows(sentinel.len())
+            .any(|window| window == sentinel));
         let frame = decode_b64(&envelope.ciphertext).unwrap();
-        assert!(!frame.windows(sentinel.len()).any(|window| window == sentinel));
+        assert!(!frame
+            .windows(sentinel.len())
+            .any(|window| window == sentinel));
     }
 }
