@@ -119,3 +119,29 @@ jobs:
           name: cargo-lock-openmls
           path: desktop/src-tauri/Cargo.lock
 
+  openmls-slice1:
+    name: openmls Slice 1 (identity + KeyPackage generation)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop/src-tauri/crypto-host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Install libsecret (Linux)
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libsecret-1-dev
+
+      # Slice 1 gate: openmls backend must build clean and every Slice 1
+      # test in src/backend/openmls.rs must pass. If this job is red,
+      # Slice 2 is blocked.
+      - name: clippy (openmls backend, deny warnings)
+        run: cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings
+      - name: test (openmls backend)
+        run: cargo test --no-default-features --features backend-openmls -- --nocapture
+
+

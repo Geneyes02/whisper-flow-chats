@@ -32,7 +32,13 @@ license = "MIT OR Apache-2.0"
 default = ["backend-stub"]
 backend-stub = []
 backend-libsignal = ["dep:libsignal-protocol"]
-backend-openmls = ["dep:openmls", "dep:openmls_rust_crypto", "dep:openmls_traits"]
+backend-openmls = [
+    "dep:openmls",
+    "dep:openmls_rust_crypto",
+    "dep:openmls_traits",
+    "dep:openmls_basic_credential",
+    "dep:tls_codec",
+]
 
 [dependencies]
 serde         = { version = "1", features = ["derive"] }
@@ -43,6 +49,7 @@ rand_core     = { version = "0.6", features = ["getrandom"] }
 sha2          = "0.10"
 hex           = "0.4"
 parking_lot   = "0.12"
+base64        = "0.22"
 
 # OS keychain (macOS Keychain / Windows Credential Manager / Linux
 # SecretService via libsecret). This is the ONLY place secret material
@@ -52,17 +59,19 @@ keyring       = "3"
 # Backend-libsignal — gated. Not resolved unless the feature is on.
 libsignal-protocol = { version = "0.60", optional = true }
 
-# Backend-openmls — gated. Pinned; see docs/OPENMLS-BASELINE.md.
-# Do NOT bump these without updating the baseline document and re-running
-# the messaging conformance suite.
 # Backend-openmls — gated. Pinned to the newest stable release that
 # contains the May 2026 SRLabs audit remediations. See
 # docs/OPENMLS-BASELINE.md for the audit-finding evidence matrix.
 # Do NOT bump these without updating the baseline document and re-running
 # the messaging conformance suite + `cargo audit`.
-openmls              = { version = "=0.8.1", optional = true }
-openmls_rust_crypto  = { version = "=0.5.1", optional = true }
-openmls_traits       = { version = "=0.5.0", optional = true }
+openmls                    = { version = "=0.8.1", optional = true }
+openmls_rust_crypto        = { version = "=0.5.1", optional = true }
+openmls_traits             = { version = "=0.5.0", optional = true }
+# Sub-crate versions intentionally left to cargo resolution against the
+# pinned openmls 0.8.1; Slice 2 will pin these once the resolved lock
+# from CI is reviewed and recorded in docs/OPENMLS-BASELINE.md.
+openmls_basic_credential   = { version = "*", optional = true }
+tls_codec                  = { version = "*", features = ["derive"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
