@@ -1,0 +1,45 @@
+name: native MLS client CI
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/crypto/**"
+      - "src/lib/native-mls-client.ts"
+      - "src/lib/native-mls.functions.ts"
+      - "src/lib/mls-directory.functions.ts"
+      - "supabase/migrations/20260724060000_native_mls_messaging.sql"
+      - ".github/workflows/native-mls-client-ci.yml"
+  push:
+    paths:
+      - "src/lib/crypto/**"
+      - "src/lib/native-mls-client.ts"
+      - "src/lib/native-mls.functions.ts"
+      - "src/lib/mls-directory.functions.ts"
+      - "supabase/migrations/20260724060000_native_mls_messaging.sql"
+      - ".github/workflows/native-mls-client-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  typecheck:
+    name: native MLS TypeScript contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: TypeScript typecheck
+        run: bun x tsc --noEmit
+      - name: Targeted ESLint
+        run: >-
+          bun x eslint
+          src/lib/crypto/types.ts
+          src/lib/crypto/encoding.ts
+          src/lib/crypto/libsignal-bridge.ts
+          src/lib/crypto/provider-registry.ts
+          src/lib/native-mls-client.ts
+          src/lib/native-mls.functions.ts
+          src/lib/mls-directory.functions.ts
+      - name: KeyPackage substitution tests
+        run: bun x vitest run test/mls-substitution.test.ts
