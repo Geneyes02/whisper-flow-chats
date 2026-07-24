@@ -1,0 +1,97 @@
+name: native E2EE verification marker
+
+on:
+  push:
+    branches: [whispr/e2ee-phase-b]
+    paths:
+      - 'desktop/src-tauri/**'
+      - 'src/lib/**'
+      - 'src/routes/_authenticated/app.tsx'
+      - 'test/**'
+      - '.github/workflows/e2ee-verification-marker-20260724.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev
+      - name: rustfmt
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo fmt --all -- --check
+      - name: clippy
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings
+      - name: complete OpenMLS suite
+        working-directory: desktop/src-tauri/crypto-host
+        env:
+          RUST_BACKTRACE: '1'
+        run: cargo test --no-default-features --features backend-openmls -- --nocapture
+      - name: default desktop build
+        run: cargo check --manifest-path desktop/src-tauri/Cargo.toml
+
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: typecheck
+        run: bun x tsc --noEmit
+      - name: full tests
+        run: bun run vitest run
+      - name: build
+        run: bun run build
+
+  verified-marker:
+    needs: [rust, app]
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/whispr/e2ee-phase-b' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: whispr/e2ee-phase-b
+          fetch-depth: 0
+      - name: Write marker only after all gates passed
+        shell: bash
+        run: |
+          mkdir -p docs
+          cat > docs/E2EE-RELEASE-VERIFIED.md <<EOF
+          # Native E2EE release verification
+
+          Automated native cryptographic/application gate passed for source commit:
+
+          \`${GITHUB_SHA}\`
+
+          Verified by this workflow:
+          - Rust formatting
+          - strict clippy for backend-openmls
+          - complete backend-openmls test suite
+          - default Tauri desktop cargo check
+          - TypeScript typecheck
+          - complete Vitest suite
+          - production web build
+
+          This is not an independent security audit. Server directory/relay integration gates remain separate mandatory release checks.
+          EOF
+      - name: Commit verification marker
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/E2EE-RELEASE-VERIFIED.md
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'ci(e2ee): record green native release verification'
+          git push origin HEAD:whispr/e2ee-phase-b
