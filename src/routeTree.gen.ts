@@ -9,14 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SecurityRouteImport } from './routes/security'
 import { Route as DownloadRouteImport } from './routes/download'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as JoinCodeRouteImport } from './routes/join.$code'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedPrivacyDashboardRouteImport } from './routes/_authenticated/privacy-dashboard'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 
+const SecurityRoute = SecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DownloadRoute = DownloadRouteImport.update({
   id: '/download',
   path: '/download',
@@ -46,6 +53,12 @@ const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedPrivacyDashboardRoute =
+  AuthenticatedPrivacyDashboardRouteImport.update({
+    id: '/privacy-dashboard',
+    path: '/privacy-dashboard',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
   id: '/app',
   path: '/app',
@@ -56,7 +69,9 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/download': typeof DownloadRoute
+  '/security': typeof SecurityRoute
   '/app': typeof AuthenticatedAppRoute
+  '/privacy-dashboard': typeof AuthenticatedPrivacyDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/join/$code': typeof JoinCodeRoute
 }
@@ -64,7 +79,9 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/download': typeof DownloadRoute
+  '/security': typeof SecurityRoute
   '/app': typeof AuthenticatedAppRoute
+  '/privacy-dashboard': typeof AuthenticatedPrivacyDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/join/$code': typeof JoinCodeRoute
 }
@@ -74,22 +91,42 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/download': typeof DownloadRoute
+  '/security': typeof SecurityRoute
   '/_authenticated/app': typeof AuthenticatedAppRoute
+  '/_authenticated/privacy-dashboard': typeof AuthenticatedPrivacyDashboardRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/join/$code': typeof JoinCodeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/download' | '/app' | '/settings' | '/join/$code'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/download'
+    | '/security'
+    | '/app'
+    | '/privacy-dashboard'
+    | '/settings'
+    | '/join/$code'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/download' | '/app' | '/settings' | '/join/$code'
+  to:
+    | '/'
+    | '/auth'
+    | '/download'
+    | '/security'
+    | '/app'
+    | '/privacy-dashboard'
+    | '/settings'
+    | '/join/$code'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
     | '/download'
+    | '/security'
     | '/_authenticated/app'
+    | '/_authenticated/privacy-dashboard'
     | '/_authenticated/settings'
     | '/join/$code'
   fileRoutesById: FileRoutesById
@@ -99,11 +136,19 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   DownloadRoute: typeof DownloadRoute
+  SecurityRoute: typeof SecurityRoute
   JoinCodeRoute: typeof JoinCodeRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/security': {
+      id: '/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof SecurityRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/download': {
       id: '/download'
       path: '/download'
@@ -146,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/privacy-dashboard': {
+      id: '/_authenticated/privacy-dashboard'
+      path: '/privacy-dashboard'
+      fullPath: '/privacy-dashboard'
+      preLoaderRoute: typeof AuthenticatedPrivacyDashboardRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/app': {
       id: '/_authenticated/app'
       path: '/app'
@@ -158,11 +210,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRoute: typeof AuthenticatedAppRoute
+  AuthenticatedPrivacyDashboardRoute: typeof AuthenticatedPrivacyDashboardRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRoute: AuthenticatedAppRoute,
+  AuthenticatedPrivacyDashboardRoute: AuthenticatedPrivacyDashboardRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
 }
 
@@ -174,6 +228,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   DownloadRoute: DownloadRoute,
+  SecurityRoute: SecurityRoute,
   JoinCodeRoute: JoinCodeRoute,
 }
 export const routeTree = rootRouteImport
