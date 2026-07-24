@@ -3,6 +3,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { detectRuntime } from "@/lib/crypto/provider-registry";
+import { utf8 } from "@/lib/crypto/encoding";
+import { receiveNativeMlsMessages, sendNativeMlsMessage } from "@/lib/native-mls-client";
+import { loadNativeHistory } from "@/lib/native-local-history";
 import { getMe } from "@/lib/profile.functions";
 import { searchUsers } from "@/lib/contacts.functions";
 import {
@@ -117,7 +121,11 @@ function ChatApp() {
     const ch = supabase
       .channel(`user:${uid}:convos`)
       .on("postgres_changes", { event: "*", schema: "public", table: "conversations" }, invalidate)
-      .on("postgres_changes", { event: "*", schema: "public", table: "conversation_members" }, invalidate)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "conversation_members" },
+        invalidate,
+      )
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, invalidate)
       .subscribe();
     return () => {
@@ -132,8 +140,7 @@ function ChatApp() {
     void navigate({ to: "/auth", replace: true });
   }
 
-  const active: Conversation | null =
-    (convos.data ?? []).find((c) => c.id === activeId) ?? null;
+  const active: Conversation | null = (convos.data ?? []).find((c) => c.id === activeId) ?? null;
 
   return (
     <div className="relative flex h-dvh flex-col overflow-hidden bg-background text-foreground">
@@ -155,12 +162,23 @@ function ChatApp() {
             aria-label="Chats"
             className="grid h-8 w-8 place-items-center rounded-lg border border-white/10 bg-white/[0.03] transition hover:bg-white/[0.06] md:hidden"
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M3 6h18M3 12h18M3 18h18" />
             </svg>
           </button>
           <Link to="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <span className="grid h-6 w-6 place-items-center rounded-md avatar-gradient text-[11px]">W</span>
+            <span className="grid h-6 w-6 place-items-center rounded-md avatar-gradient text-[11px]">
+              W
+            </span>
             Whispr
           </Link>
         </div>
@@ -193,9 +211,17 @@ function ChatApp() {
             <div className="relative">
               <svg
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" />
+                <circle cx="11" cy="11" r="8" />
+                <path d="m21 21-4.3-4.3" />
               </svg>
               <input
                 value={query}
@@ -272,7 +298,16 @@ function ChatApp() {
             {convos.data?.length === 0 && (
               <div className="mx-2 mt-4 rounded-2xl border border-dashed border-white/10 p-6 text-center">
                 <div className="mx-auto mb-3 grid h-10 w-10 place-items-center rounded-full avatar-gradient">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                   </svg>
                 </div>
@@ -312,13 +347,27 @@ function ChatApp() {
                         <div className="flex items-baseline justify-between gap-2">
                           <p className="flex min-w-0 items-center gap-1 truncate text-sm font-medium">
                             {c.is_pinned && (
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" className="shrink-0 text-muted-foreground">
+                              <svg
+                                width="10"
+                                height="10"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                className="shrink-0 text-muted-foreground"
+                              >
                                 <path d="M12 2 8 6v6l-4 3v2h6v5h4v-5h6v-2l-4-3V6z" />
                               </svg>
                             )}
                             <span className="truncate">{title}</span>
                             {muted && (
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-muted-foreground/70">
+                              <svg
+                                width="11"
+                                height="11"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                className="shrink-0 text-muted-foreground/70"
+                              >
                                 <path d="M3 3l18 18M6 8v6l-3 2h12M15 5a4 4 0 0 1 4 4v3" />
                               </svg>
                             )}
@@ -393,13 +442,25 @@ function EmptyState() {
     <div className="fade-in hidden flex-1 items-center justify-center p-8 text-center md:flex">
       <div className="max-w-sm">
         <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl avatar-gradient shadow-lg shadow-electric/20">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="22"
+            height="22"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
         </div>
-        <h2 className="text-lg font-semibold tracking-tight">Your conversations, in one calm place</h2>
+        <h2 className="text-lg font-semibold tracking-tight">
+          Your conversations, in one calm place
+        </h2>
         <p className="mx-auto mt-2 text-sm text-muted-foreground">
-          Pick a chat from the sidebar, or search for someone by name or <span className="text-foreground">@username</span> to start a new one.
+          Pick a chat from the sidebar, or search for someone by name or{" "}
+          <span className="text-foreground">@username</span> to start a new one.
         </p>
       </div>
     </div>
@@ -443,6 +504,10 @@ function ChatPane({
   const [viewer, setViewer] = useState<string | null>(null);
   const [typingPeers, setTypingPeers] = useState<Record<string, number>>({});
   const [uploading, setUploading] = useState(false);
+  const [nativeTextByMessageId, setNativeTextByMessageId] = useState<Record<string, string>>({});
+  const [nativeSecurityError, setNativeSecurityError] = useState<string | null>(null);
+  const isNativeDirect =
+    detectRuntime() === "tauri" && conversation.type === "direct" && !!conversation.peer?.id;
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -457,6 +522,75 @@ function ChatPane({
     inputRef.current?.focus();
   }, [conversation.id]);
 
+  useEffect(() => {
+    if (!isNativeDirect) return;
+    let cancelled = false;
+    void loadNativeHistory(conversation.id)
+      .then((history) => {
+        if (cancelled || history.length === 0) return;
+        setNativeTextByMessageId((previous) => {
+          const next = { ...previous };
+          for (const entry of history) next[entry.messageId] = entry.payload.text;
+          return next;
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setNativeSecurityError(
+            error instanceof Error ? error.message : "Encrypted local history could not be opened",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation.id, isNativeDirect]);
+
+  // Native direct-chat inbox. The native receive function only ACKs messages
+  // after authenticated MLS decryption. Other-conversation rows stay pending.
+  useEffect(() => {
+    if (!isNativeDirect) return;
+    let cancelled = false;
+
+    const pull = async () => {
+      try {
+        const result = await receiveNativeMlsMessages(200, conversation.id);
+        if (cancelled) return;
+        if (result.messages.length > 0) {
+          setNativeTextByMessageId((previous) => {
+            const next = { ...previous };
+            for (const message of result.messages) {
+              next[message.messageId] = utf8.decode(message.plaintext);
+            }
+            return next;
+          });
+          await qc.invalidateQueries({ queryKey: key });
+          await qc.invalidateQueries({ queryKey: ["conversations"] });
+        }
+        if (result.failures.length > 0) {
+          setNativeSecurityError(
+            "An encrypted message could not be authenticated. It was not acknowledged.",
+          );
+        } else {
+          setNativeSecurityError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setNativeSecurityError(
+            error instanceof Error ? error.message : "Native E2EE receive failed",
+          );
+        }
+      }
+    };
+
+    void pull();
+    const timer = window.setInterval(() => void pull(), 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [conversation.id, isNativeDirect, qc, key]);
+
   // Realtime: messages + reactions + attachments + typing broadcast
   useEffect(() => {
     const invalidate = () => qc.invalidateQueries({ queryKey: key });
@@ -468,7 +602,12 @@ function ChatPane({
       .channel(`conv:${conversation.id}`, { config: { broadcast: { self: false } } })
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "messages", filter: `conversation_id=eq.${conversation.id}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "messages",
+          filter: `conversation_id=eq.${conversation.id}`,
+        },
         invalidateAll,
       )
       .on(
@@ -518,19 +657,42 @@ function ChatPane({
   }, [messages.data, conversation.id, markRead]);
 
   const sendMut = useMutation({
-    mutationFn: (body: string) =>
-      send({
+    mutationFn: async (body: string) => {
+      if (isNativeDirect) {
+        const targetUserId = conversation.peer?.id;
+        if (!targetUserId) throw new Error("Direct-chat peer is unavailable");
+        const result = await sendNativeMlsMessage({
+          conversationId: conversation.id,
+          targetUserId,
+          plaintext: utf8.encode(body),
+        });
+        return { id: result.messageId, nativeText: body };
+      }
+
+      const result = await send({
         data: {
           conversationId: conversation.id,
           text: body,
           replyToMessageId: replyTo?.id ?? null,
         },
-      }),
-    onSuccess: () => {
+      });
+      return { id: result.id, nativeText: null };
+    },
+    onSuccess: (result) => {
+      if (result.nativeText) {
+        setNativeTextByMessageId((previous) => ({
+          ...previous,
+          [result.id]: result.nativeText!,
+        }));
+      }
       setText("");
       setReplyTo(null);
+      setNativeSecurityError(null);
       qc.invalidateQueries({ queryKey: key });
       qc.invalidateQueries({ queryKey: ["conversations"] });
+    },
+    onError: (error) => {
+      setNativeSecurityError(error instanceof Error ? error.message : "Encrypted send failed");
     },
   });
 
@@ -569,11 +731,8 @@ function ChatPane({
 
   const muteConvMut = useMutation({
     mutationFn: () => {
-      const isMuted =
-        conversation.muted_until && Date.parse(conversation.muted_until) > Date.now();
-      const until = isMuted
-        ? null
-        : new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString();
+      const isMuted = conversation.muted_until && Date.parse(conversation.muted_until) > Date.now();
+      const until = isMuted ? null : new Date(Date.now() + 1000 * 60 * 60 * 8).toISOString();
       return setMuted({
         data: { conversationId: conversation.id, mutedUntil: until },
       });
@@ -608,6 +767,12 @@ function ChatPane({
   }
 
   function startEdit(m: ChatMessage) {
+    if (isNativeDirect) {
+      setNativeSecurityError(
+        "Editing E2EE messages is disabled until encrypted edit events are implemented.",
+      );
+      return;
+    }
     setReplyTo(null);
     setEditingId(m.id);
     setText(m.text);
@@ -633,6 +798,12 @@ function ChatPane({
   const handleFiles = useCallback(
     async (files: FileList | null) => {
       if (!files || files.length === 0) return;
+      if (isNativeDirect) {
+        setNativeSecurityError(
+          "Encrypted attachments are not enabled yet. Whispr will not upload this file through the plaintext media path.",
+        );
+        return;
+      }
       const usable = Array.from(files).slice(0, 6);
       setUploading(true);
       try {
@@ -692,12 +863,21 @@ function ChatPane({
         setUploading(false);
       }
     },
-    [conversation.id, uploadFn, sendMedia, text, replyTo, qc, key],
+    [conversation.id, uploadFn, sendMedia, text, replyTo, qc, key, isNativeDirect],
   );
 
   // Group by day + sender-run
+  const displayMessages = useMemo(
+    () =>
+      (messages.data ?? []).map((message) => {
+        const nativeText = nativeTextByMessageId[message.id];
+        return nativeText === undefined ? message : { ...message, text: nativeText };
+      }),
+    [messages.data, nativeTextByMessageId],
+  );
+
   const grouped = useMemo(() => {
-    const msgs = messages.data ?? [];
+    const msgs = displayMessages;
     const out: Array<
       | { kind: "day"; iso: string; label: string }
       | { kind: "msg"; m: ChatMessage; sameAsPrev: boolean; sameAsNext: boolean; showName: boolean }
@@ -716,15 +896,16 @@ function ChatPane({
       const nextSameDay = next && new Date(next.created_at).toDateString() === day;
       const sameAsPrev = !!prev && prevSameDay && prev.sender_id === m.sender_id;
       const sameAsNext = !!next && nextSameDay && next.sender_id === m.sender_id;
-      const showName = conversation.type !== "direct" && !sameAsPrev && m.sender_id !== currentUserId;
+      const showName =
+        conversation.type !== "direct" && !sameAsPrev && m.sender_id !== currentUserId;
       out.push({ kind: "msg", m, sameAsPrev, sameAsNext, showName });
     }
     return out;
-  }, [messages.data, conversation.type, currentUserId]);
+  }, [displayMessages, conversation.type, currentUserId]);
 
   const pinnedMsg = useMemo(
-    () => (messages.data ?? []).find((m) => m.is_pinned && !m.deleted_at),
-    [messages.data],
+    () => displayMessages.find((m) => m.is_pinned && !m.deleted_at),
+    [displayMessages],
   );
 
   const typingNames = Object.keys(typingPeers)
@@ -767,7 +948,16 @@ function ChatPane({
             onClick={() => pinConvMut.mutate()}
             label={conversation.is_pinned ? "Unpin chat" : "Pin chat"}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M12 2 8 6v6l-4 3v2h6v5h4v-5h6v-2l-4-3V6z" />
             </svg>
           </HeaderIconButton>
@@ -777,11 +967,29 @@ function ChatPane({
             label={isMuted ? "Unmute" : "Mute 8 h"}
           >
             {isMuted ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M3 3l18 18M6 8v6l-3 2h12M15 5a4 4 0 0 1 4 4v3" />
               </svg>
             ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M15 17h5l-1.4-1.4A7 7 0 0 1 17 11V8a5 5 0 0 0-10 0v3a7 7 0 0 1-1.6 4.6L4 17h5m6 0v1a3 3 0 0 1-6 0v-1" />
               </svg>
             )}
@@ -789,15 +997,26 @@ function ChatPane({
         </div>
       </div>
 
+      {nativeSecurityError && (
+        <div className="border-b border-amber-500/20 bg-amber-500/5 px-4 py-2 text-xs text-amber-200 md:px-5">
+          {nativeSecurityError}
+        </div>
+      )}
+
       {/* pinned banner */}
       {pinnedMsg && (
         <div className="flex items-center gap-2 border-b border-white/5 bg-white/[0.02] px-4 py-2 md:px-5">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" className="text-electric">
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className="text-electric"
+          >
             <path d="M12 2 8 6v6l-4 3v2h6v5h4v-5h6v-2l-4-3V6z" />
           </svg>
           <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            <span className="text-foreground/80">Pinned:</span>{" "}
-            {pinnedMsg.text || "(media)"}
+            <span className="text-foreground/80">Pinned:</span> {pinnedMsg.text || "(media)"}
           </p>
           <button
             onClick={() => pinMut.mutate({ id: pinnedMsg.id, pinned: false })}
@@ -810,9 +1029,7 @@ function ChatPane({
 
       {/* messages */}
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-6 md:px-8">
-        {messages.isLoading && (
-          <p className="text-sm text-muted-foreground">Loading messages…</p>
-        )}
+        {messages.isLoading && <p className="text-sm text-muted-foreground">Loading messages…</p>}
         {messages.data?.length === 0 && (
           <div className="fade-in mx-auto mt-16 max-w-sm text-center">
             <p className="text-sm text-muted-foreground">
@@ -837,7 +1054,7 @@ function ChatPane({
                 sameAsPrev={row.sameAsPrev}
                 sameAsNext={row.sameAsNext}
                 showName={row.showName}
-                senderName={row.m.sender_id ? senderNameById.get(row.m.sender_id) ?? "" : ""}
+                senderName={row.m.sender_id ? (senderNameById.get(row.m.sender_id) ?? "") : ""}
                 onReply={() => startReply(row.m)}
                 onEdit={() => startEdit(row.m)}
                 onDelete={() => {
@@ -857,7 +1074,9 @@ function ChatPane({
       {typingNames.length > 0 && (
         <div className="pointer-events-none mx-auto -mt-4 mb-1 flex max-w-3xl items-center gap-2 px-6 text-[11px] text-muted-foreground">
           <span className="inline-flex gap-0.5">
-            <Dot delay={0} /><Dot delay={0.15} /><Dot delay={0.3} />
+            <Dot delay={0} />
+            <Dot delay={0.15} />
+            <Dot delay={0.3} />
           </span>
           {typingNames.slice(0, 2).join(" & ")} typing…
         </div>
@@ -876,7 +1095,7 @@ function ChatPane({
                     {" "}
                     {replyTo.sender_id === currentUserId
                       ? "yourself"
-                      : senderNameById.get(replyTo.sender_id) ?? ""}
+                      : (senderNameById.get(replyTo.sender_id) ?? "")}
                   </span>
                 )}
               </p>
@@ -889,7 +1108,16 @@ function ChatPane({
               className="text-muted-foreground transition hover:text-foreground"
               aria-label="Cancel"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M18 6 6 18M6 6l12 12" />
               </svg>
             </button>
@@ -921,11 +1149,28 @@ function ChatPane({
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-muted-foreground transition hover:bg-white/[0.06] hover:text-foreground disabled:opacity-40"
           >
             {uploading ? (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                className="animate-spin"
+              >
                 <path d="M21 12a9 9 0 1 1-6.2-8.6" />
               </svg>
             ) : (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="m21 12-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8L14 4.6a3.7 3.7 0 0 1 5.2 5.2L10.5 18.5a1.8 1.8 0 0 1-2.6-2.6L15 8.8" />
               </svg>
             )}
@@ -955,11 +1200,29 @@ function ChatPane({
             className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-electric text-electric-foreground shadow-lg shadow-electric/30 transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
           >
             {editingId ? (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M20 6 9 17l-5-5" />
               </svg>
             ) : (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <svg
+                width="15"
+                height="15"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
                 <path d="M22 2 11 13" />
                 <path d="M22 2 15 22l-4-9-9-4z" />
               </svg>
@@ -1039,8 +1302,19 @@ function MessageRow({
             ].join(" ")}
           >
             {message.forwarded_from_message_id && !deleted && (
-              <p className={`mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wider ${metaTone}`}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <p
+                className={`mb-1 flex items-center gap-1 text-[10px] uppercase tracking-wider ${metaTone}`}
+              >
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M15 17l5-5-5-5M4 18v-2a4 4 0 0 1 4-4h12" />
                 </svg>
                 Forwarded
@@ -1060,19 +1334,15 @@ function MessageRow({
             ) : (
               <>
                 {message.attachments.length > 0 && (
-                  <div className={`mb-1 grid gap-1 ${message.attachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                  <div
+                    className={`mb-1 grid gap-1 ${message.attachments.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}
+                  >
                     {message.attachments.map((a) => (
-                      <AttachmentTile
-                        key={a.id}
-                        attachment={a}
-                        onOpen={onOpenImage}
-                      />
+                      <AttachmentTile key={a.id} attachment={a} onOpen={onOpenImage} />
                     ))}
                   </div>
                 )}
-                {message.text && (
-                  <p className="whitespace-pre-wrap break-words">{message.text}</p>
-                )}
+                {message.text && <p className="whitespace-pre-wrap break-words">{message.text}</p>}
               </>
             )}
             {!sameAsNext && !deleted && (
@@ -1102,13 +1372,31 @@ function MessageRow({
                   setShowMenu(false);
                 }}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <circle cx="12" cy="12" r="10" />
                   <path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" />
                 </svg>
               </ActionButton>
               <ActionButton label="Reply" onClick={onReply}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg
+                  width="13"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
                   <path d="M9 17l-5-5 5-5M4 12h11a5 5 0 0 1 5 5v2" />
                 </svg>
               </ActionButton>
@@ -1121,11 +1409,15 @@ function MessageRow({
                   }}
                 >
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" />
+                    <circle cx="5" cy="12" r="1.5" />
+                    <circle cx="12" cy="12" r="1.5" />
+                    <circle cx="19" cy="12" r="1.5" />
                   </svg>
                 </ActionButton>
                 {showMenu && (
-                  <div className={`absolute top-full z-10 mt-1 w-40 overflow-hidden rounded-xl border border-white/10 bg-black/80 py-1 text-xs backdrop-blur-xl ${mine ? "right-0" : "left-0"}`}>
+                  <div
+                    className={`absolute top-full z-10 mt-1 w-40 overflow-hidden rounded-xl border border-white/10 bg-black/80 py-1 text-xs backdrop-blur-xl ${mine ? "right-0" : "left-0"}`}
+                  >
                     <MenuItem
                       onClick={() => {
                         setShowMenu(false);
@@ -1237,7 +1529,12 @@ function AttachmentTile({
       <button
         onClick={() => onOpen(attachment.storage_path)}
         className="group/img relative block max-w-[280px] overflow-hidden rounded-lg bg-black/40"
-        style={{ aspectRatio: attachment.width && attachment.height ? `${attachment.width}/${attachment.height}` : "4/3" }}
+        style={{
+          aspectRatio:
+            attachment.width && attachment.height
+              ? `${attachment.width}/${attachment.height}`
+              : "4/3",
+        }}
       >
         {q.data?.url ? (
           <img
@@ -1260,8 +1557,18 @@ function AttachmentTile({
       rel="noreferrer"
       className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-xs transition hover:bg-white/[0.06]"
     >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" />
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
       </svg>
       <span className="truncate">{attachment.storage_path.split("/").pop()}</span>
     </a>
@@ -1302,7 +1609,16 @@ function ImageViewer({ path, onClose }: { path: string; onClose: () => void }) {
         aria-label="Close"
         className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full border border-white/10 bg-black/60 text-white"
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M18 6 6 18M6 6l12 12" />
         </svg>
       </button>
@@ -1344,15 +1660,31 @@ function NewGroupModal({
   const canCreate = title.trim().length > 0 && Object.keys(selected).length >= 1;
 
   return (
-    <div className="fixed inset-0 z-40 grid place-items-center bg-black/70 p-4 backdrop-blur-xl" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-40 grid place-items-center bg-black/70 p-4 backdrop-blur-xl"
+      onClick={onClose}
+    >
       <div
         className="w-full max-w-md rounded-2xl border border-white/10 bg-background p-5 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-base font-semibold">New group</h3>
-          <button onClick={onClose} aria-label="Close" className="text-muted-foreground hover:text-foreground">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M18 6 6 18M6 6l12 12" />
             </svg>
           </button>
@@ -1418,7 +1750,17 @@ function NewGroupModal({
                     )}
                   </div>
                   {isSel && (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-electric">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="text-electric"
+                    >
                       <path d="M20 6 9 17l-5-5" />
                     </svg>
                   )}
@@ -1427,7 +1769,10 @@ function NewGroupModal({
             })}
         </div>
         <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+          <button
+            onClick={onClose}
+            className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs"
+          >
             Cancel
           </button>
           <button

@@ -1,0 +1,82 @@
+name: apply OpenMLS runtime hardening PR
+
+on:
+  pull_request:
+    paths:
+      - "scripts/harden_openmls_runtime.py"
+      - ".github/workflows/apply-openmls-runtime-hardening-pr.yml"
+      - "desktop/src-tauri/crypto-host/src/backend/openmls_runtime.rs"
+      - "desktop/src-tauri/crypto-host/src/local_seal.rs"
+      - "desktop/src-tauri/crypto-host/tests/harness.rs"
+      - "desktop/src-tauri/Cargo.toml"
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: whispr/e2ee-phase-b
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install libsecret
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev >/dev/null
+      - name: Apply asserted hardening patch if not already present
+        shell: bash
+        run: |
+          if grep -q 'catch_unwind' desktop/src-tauri/crypto-host/src/backend/openmls_runtime.rs; then
+            echo 'hardening already present'
+          else
+            python scripts/harden_openmls_runtime.py
+          fi
+      - name: Format
+        working-directory: desktop/src-tauri
+        run: cargo fmt --all
+      - name: Strict crypto-host clippy
+        working-directory: desktop/src-tauri/crypto-host
+        shell: bash
+        run: |
+          set +e
+          cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings > /tmp/harden-clippy.log 2>&1
+          status=$?
+          tail -n 160 /tmp/harden-clippy.log
+          exit $status
+      - name: OpenMLS runtime tests
+        if: success()
+        working-directory: desktop/src-tauri/crypto-host
+        shell: bash
+        run: |
+          set +e
+          cargo test --no-default-features --features backend-openmls -- --nocapture > /tmp/harden-tests.log 2>&1
+          status=$?
+          tail -n 220 /tmp/harden-tests.log
+          exit $status
+      - name: Upload hardening diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmls-hardening-diagnostics
+          path: |
+            /tmp/harden-clippy.log
+            /tmp/harden-tests.log
+          if-no-files-found: warn
+      - name: Commit verified hardening if changed
+        if: success()
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo 'no changes to commit'
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop/src-tauri/crypto-host/src/backend/openmls_runtime.rs \
+                  desktop/src-tauri/crypto-host/src/local_seal.rs \
+                  desktop/src-tauri/crypto-host/tests/harness.rs \
+                  desktop/src-tauri/Cargo.toml
+          git commit -m "fix(e2ee): contain hostile OpenMLS ciphertext panics"
+          git push origin HEAD:whispr/e2ee-phase-b

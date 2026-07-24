@@ -1,0 +1,46 @@
+name: apply OpenMLS runtime hardening
+
+on:
+  push:
+    branches:
+      - whispr/e2ee-phase-b
+    paths:
+      - "scripts/harden_openmls_runtime.py"
+      - ".github/workflows/apply-openmls-runtime-hardening.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: whispr/e2ee-phase-b
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install libsecret
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev >/dev/null
+      - name: Apply asserted hardening patch
+        run: python scripts/harden_openmls_runtime.py
+      - name: Format
+        working-directory: desktop/src-tauri
+        run: cargo fmt --all
+      - name: Strict crypto-host clippy
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings
+      - name: OpenMLS runtime tests
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo test --no-default-features --features backend-openmls -- --nocapture
+      - name: Commit verified hardening
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop/src-tauri/crypto-host/src/backend/openmls_runtime.rs \
+                  desktop/src-tauri/crypto-host/src/local_seal.rs \
+                  desktop/src-tauri/Cargo.toml
+          git commit -m "fix(e2ee): contain hostile OpenMLS ciphertext panics"
+          git push origin HEAD:whispr/e2ee-phase-b

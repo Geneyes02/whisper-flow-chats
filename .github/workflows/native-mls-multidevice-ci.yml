@@ -1,0 +1,83 @@
+name: native MLS multi-device CI
+
+on:
+  pull_request:
+    paths:
+      - "supabase/tests/native_mls_multidevice.sql"
+      - "src/lib/native-mls-client.ts"
+      - "src/lib/native-mls.functions.ts"
+      - ".github/workflows/native-mls-multidevice-ci.yml"
+  workflow_dispatch:
+
+jobs:
+  multidevice-sql:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: whispr_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      PGPASSWORD: postgres
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGDATABASE: whispr_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bootstrap Supabase shims
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE SCHEMA IF NOT EXISTS auth;
+          CREATE TABLE IF NOT EXISTS auth.users (
+            id uuid PRIMARY KEY,
+            email text,
+            encrypted_password text,
+            aud text,
+            role text,
+            instance_id uuid,
+            raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb,
+            raw_app_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb,
+            created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now()
+          );
+          CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
+            LANGUAGE sql STABLE AS
+          $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          CREATE SCHEMA IF NOT EXISTS storage;
+          CREATE TABLE IF NOT EXISTS storage.objects (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            bucket_id text NOT NULL,
+            name text NOT NULL,
+            owner uuid,
+            created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now()
+          );
+          ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+          DO $do$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role; END IF;
+          END $do$;
+          DO $do$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'supabase_realtime') THEN
+              CREATE PUBLICATION supabase_realtime;
+            END IF;
+          END $do$;
+          SQL
+      - name: Apply migrations
+        run: |
+          set -euo pipefail
+          for f in $(ls supabase/migrations/*.sql | sort); do
+            psql -v ON_ERROR_STOP=1 -f "$f" >/dev/null
+          done
+      - name: Run multi-device security assertions
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/native_mls_multidevice.sql

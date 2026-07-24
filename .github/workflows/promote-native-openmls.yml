@@ -1,0 +1,132 @@
+name: promote native OpenMLS direct messaging
+
+on:
+  pull_request:
+    paths:
+      - "desktop/src-tauri/crypto-host/**"
+      - "desktop/src-tauri/Cargo.toml"
+      - "src/lib/crypto/libsignal-bridge.ts"
+      - ".github/workflows/promote-native-openmls.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install native + Tauri Linux dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf \
+            libdbus-1-dev \
+            libsecret-1-dev >/dev/null
+      - name: Rust formatting
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo fmt --all -- --check
+      - name: Strict OpenMLS clippy
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings
+      - name: Full OpenMLS + local-seal tests
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo test --no-default-features --features backend-openmls -- --nocapture
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
+      - name: TypeScript contract
+        run: bun x tsc --noEmit
+      - name: Promote production desktop backend + capability
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          cargo = Path('desktop/src-tauri/Cargo.toml')
+          s = cargo.read_text()
+          old = 'whispr-crypto-host = { path = "crypto-host", default-features = false, features = ["backend-stub"] }'
+          new = 'whispr-crypto-host = { path = "crypto-host", default-features = false, features = ["backend-openmls"] }'
+          if old in s:
+              s = s.replace(old, new, 1)
+              cargo.write_text(s)
+          elif new not in s:
+              raise SystemExit('desktop backend dependency is neither stub nor OpenMLS expected shape')
+
+          bridge = Path('src/lib/crypto/libsignal-bridge.ts')
+          s = bridge.read_text()
+          if 'supportsOneOnOne: false' in s:
+              s = s.replace('supportsOneOnOne: false', 'supportsOneOnOne: true', 1)
+              bridge.write_text(s)
+          elif 'supportsOneOnOne: true' not in s:
+              raise SystemExit('native capability flag not found')
+          PY
+      - name: Verify promoted TypeScript
+        run: bun x prettier --write src/lib/crypto/libsignal-bridge.ts && bun x tsc --noEmit
+      - name: Ensure CI-only Tauri icon exists
+        shell: bash
+        run: |
+          if [ ! -f desktop/src-tauri/icons/icon.png ]; then
+            python - <<'PY'
+            from pathlib import Path
+            import base64
+
+            # 1x1 opaque PNG. Tauri's compile-time context macro requires an icon
+            # file even for `cargo check`; this file is generated only in CI and is
+            # never committed or shipped.
+            png = base64.b64decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII='
+            )
+            path = Path('desktop/src-tauri/icons/icon.png')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(png)
+            PY
+          fi
+      - name: Verify promoted desktop dependency resolves
+        working-directory: desktop/src-tauri
+        shell: bash
+        run: |
+          set +e
+          cargo check > /tmp/promoted-desktop-check.log 2>&1
+          status=$?
+          tail -n 200 /tmp/promoted-desktop-check.log
+          exit $status
+      - name: Upload promoted desktop build diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: promoted-desktop-build-diagnostic
+          path: /tmp/promoted-desktop-check.log
+          if-no-files-found: warn
+      - name: Commit promotion
+        if: success()
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "native OpenMLS already promoted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop/src-tauri/Cargo.toml src/lib/crypto/libsignal-bridge.ts
+          git commit -m "feat(e2ee): promote OpenMLS as native direct-message backend"
+          git push origin HEAD:${{ github.head_ref }}

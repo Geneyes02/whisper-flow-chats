@@ -6,10 +6,9 @@
 //! KWallet). The `keyring` crate selects the right backend at compile time
 //! for the host target.
 //!
-//! We store *sealed blobs* here — the backend chooses the format (a
-//! libsignal `IdentityKeyStore` snapshot, a serialized session store, an
-//! at-rest encryption key for the session DB, etc.). The keychain treats
-//! them as opaque strings.
+//! We store *sealed blobs* here — the backend chooses the format (an MLS
+//! provider snapshot, a serialized session store, an at-rest encryption key
+//! for the session DB, etc.). The keychain treats them as opaque strings.
 //!
 //! Failure modes:
 //!   * Keychain locked / user denied access → `StorageLocked`
@@ -56,9 +55,9 @@ impl Slot {
     fn account(self) -> &'static str {
         match self {
             Slot::DeviceIdentity => "device-identity",
-            Slot::SessionDbKey   => "session-db-key",
-            Slot::PrekeyStore    => "prekey-store",
-            Slot::SessionStore   => "session-store",
+            Slot::SessionDbKey => "session-db-key",
+            Slot::PrekeyStore => "prekey-store",
+            Slot::SessionStore => "session-store",
         }
     }
 }
@@ -88,19 +87,24 @@ pub struct OsKeychain;
 
 impl OsKeychain {
     /// Construct a new OS-backed keychain handle.
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     fn entry(slot: Slot) -> Result<keyring::Entry> {
-        keyring::Entry::new(KEYCHAIN_SERVICE, slot.account())
-            .map_err(|_| CryptoError::new(
+        keyring::Entry::new(KEYCHAIN_SERVICE, slot.account()).map_err(|_| {
+            CryptoError::new(
                 CryptoErrorCode::StorageCorrupt,
                 "keychain entry construction failed",
-            ))
+            )
+        })
     }
 }
 
 impl Default for OsKeychain {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SecureStore for OsKeychain {
@@ -121,10 +125,9 @@ impl SecureStore for OsKeychain {
 
     fn put(&self, slot: Slot, value: &str) -> Result<()> {
         Self::entry(slot)?.set_password(value).map_err(|e| match e {
-            keyring::Error::PlatformFailure(_) => CryptoError::new(
-                CryptoErrorCode::StorageLocked,
-                "keychain platform failure",
-            ),
+            keyring::Error::PlatformFailure(_) => {
+                CryptoError::new(CryptoErrorCode::StorageLocked, "keychain platform failure")
+            }
             _ => CryptoError::new(CryptoErrorCode::StorageCorrupt, "keychain write failed"),
         })
     }
@@ -155,7 +158,9 @@ pub struct MemoryStore {
 impl MemoryStore {
     /// Empty store.
     pub fn new() -> Self {
-        Self { inner: parking_lot::Mutex::new(std::collections::HashMap::new()) }
+        Self {
+            inner: parking_lot::Mutex::new(std::collections::HashMap::new()),
+        }
     }
 
     /// Force-inject a value for a slot. Test-only helper for the
@@ -163,20 +168,33 @@ impl MemoryStore {
     pub fn inject(&self, slot: Slot, value: &str) {
         self.inner.lock().insert(slot.account(), value.to_string());
     }
+
+    /// Read a raw slot only from test builds. This intentionally bypasses the
+    /// `SecureStore` result wrapper so unit tests can assert that a public API
+    /// response is not the private persisted snapshot. It is not compiled into
+    /// production binaries.
+    #[cfg(test)]
+    pub fn inject_for_test_read(&self, slot: Slot) -> Option<String> {
+        self.inner.lock().get(slot.account()).cloned()
+    }
 }
 
 impl Default for MemoryStore {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SecureStore for MemoryStore {
     fn get(&self, slot: Slot) -> Result<Option<String>> {
         Ok(self.inner.lock().get(slot.account()).cloned())
     }
+
     fn put(&self, slot: Slot, value: &str) -> Result<()> {
         self.inner.lock().insert(slot.account(), value.to_string());
         Ok(())
     }
+
     fn delete(&self, slot: Slot) -> Result<()> {
         self.inner.lock().remove(slot.account());
         Ok(())

@@ -1,0 +1,14 @@
+name: trigger native chat integration patch
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Native chat integration is already applied; dispatcher retained manual-only for history."

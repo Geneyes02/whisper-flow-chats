@@ -5,33 +5,10 @@ edition = "2021"
 description = "Whispr native crypto host — swappable backend behind a stable command surface"
 license = "MIT OR Apache-2.0"
 
-# ------------------------------------------------------------------------
-# Backend selection
-# ------------------------------------------------------------------------
-# The Whispr application ONLY talks to this crate via the `CryptoBackend`
-# trait + the `whispr_crypto_*` command shims in the Tauri app. The concrete
-# implementation is chosen at build time by cargo feature:
-#
-#   backend-stub       — deterministic fail-closed backend. Used by CI, unit
-#                        tests, and any build where a production crypto
-#                        provider is not licensed / not desired.
-#   backend-libsignal  — thin adapter over libsignal-protocol.
-#                        DO NOT enable until docs/ADR-LIBSIGNAL-LICENSING.md
-#                        is resolved. libsignal is AGPL-3.0.
-#   backend-openmls    — MLS (RFC 9420) via openmls + openmls_rust_crypto.
-#                        Scaffold only — see docs/OPENMLS-BASELINE.md.
-#                        Refuses every messaging op until Phase B lands
-#                        credentials, KeyPackages, groups, and the full
-#                        conformance suite.
-#
-# Exactly one backend must be selected. If none is selected, the crate
-# refuses to compile so we never accidentally ship an unencrypted build.
-# ------------------------------------------------------------------------
-
 [features]
 default = ["backend-stub"]
 backend-stub = []
-backend-libsignal = ["dep:libsignal-protocol"]
+backend-libsignal = []
 backend-openmls = [
     "dep:openmls",
     "dep:openmls_rust_crypto",
@@ -50,28 +27,22 @@ sha2          = "0.10"
 hex           = "0.4"
 parking_lot   = "0.12"
 base64        = "0.22"
+aes-gcm       = "=0.11.0"
 
 # OS keychain (macOS Keychain / Windows Credential Manager / Linux
-# SecretService via libsecret). This is the ONLY place secret material
-# ever touches persistent storage.
+# SecretService via libsecret). This is the ONLY persistent sink used by the
+# crypto host for device and session secret snapshots / local-cache seal key.
 keyring       = "3"
 
-# Backend-libsignal — gated. Not resolved unless the feature is on.
-libsignal-protocol = { version = "0.60", optional = true }
-
-# Backend-openmls — gated. Pinned to the newest stable release that
-# contains the May 2026 SRLabs audit remediations. See
-# docs/OPENMLS-BASELINE.md for the audit-finding evidence matrix.
-# Do NOT bump these without updating the baseline document and re-running
-# the messaging conformance suite + `cargo audit`.
+# Backend-openmls — gated. Pinned to the post-audit baseline documented in
+# docs/OPENMLS-BASELINE.md. Do not bump without re-running the conformance,
+# dependency-audit and server-blindness gates. These direct pins are part of
+# the reproducible Phase B baseline; transitive versions remain locked by Cargo.lock.
 openmls                    = { version = "=0.8.1", optional = true }
 openmls_rust_crypto        = { version = "=0.5.1", optional = true }
 openmls_traits             = { version = "=0.5.0", optional = true }
-# Sub-crate versions intentionally left to cargo resolution against the
-# pinned openmls 0.8.1; Slice 2 will pin these once the resolved lock
-# from CI is reviewed and recorded in docs/OPENMLS-BASELINE.md.
-openmls_basic_credential   = { version = "*", optional = true }
-tls_codec                  = { version = "*", features = ["derive"], optional = true }
+openmls_basic_credential   = { version = "=0.5.0", optional = true }
+tls_codec                  = { version = "=0.4.2", features = ["derive"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"

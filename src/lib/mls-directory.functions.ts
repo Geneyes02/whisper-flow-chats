@@ -9,9 +9,9 @@
  * lives here so the messaging path can call it inline after every consume.
  */
 
-import { createServerFn } from '@tanstack/react-start';
-import { requireSupabaseAuth } from '@/integrations/supabase/auth-middleware';
-import { z } from 'zod';
+import { createServerFn } from "@tanstack/react-start";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // publish_mls_key_packages
@@ -27,16 +27,15 @@ const PublishBundle = z.object({
 });
 export type PublishBundle = z.infer<typeof PublishBundle>;
 
-export const publishMlsKeyPackages = createServerFn({ method: 'POST' })
+export const publishMlsKeyPackages = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { bundles: PublishBundle[] }) =>
     z.object({ bundles: z.array(PublishBundle).min(1).max(200) }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { data: rows, error } = await context.supabase.rpc(
-      'publish_mls_key_packages',
-      { bundles: data.bundles as never },
-    );
+    const { data: rows, error } = await context.supabase.rpc("publish_mls_key_packages", {
+      bundles: data.bundles as never,
+    });
     if (error) throw new Error(error.message);
     return (rows ?? []) as Array<{ key_package_hash: string; status: string }>;
   });
@@ -45,7 +44,7 @@ export const publishMlsKeyPackages = createServerFn({ method: 'POST' })
 // consume_mls_key_package
 // ---------------------------------------------------------------------------
 
-export const consumeMlsKeyPackage = createServerFn({ method: 'POST' })
+export const consumeMlsKeyPackage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { targetUser: string; targetDevice?: string }) =>
     z
@@ -56,13 +55,10 @@ export const consumeMlsKeyPackage = createServerFn({ method: 'POST' })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { data: rows, error } = await context.supabase.rpc(
-      'consume_mls_key_package',
-      {
-        target_user: data.targetUser,
-        target_device: data.targetDevice ?? undefined,
-      },
-    );
+    const { data: rows, error } = await context.supabase.rpc("consume_mls_key_package", {
+      target_user: data.targetUser,
+      target_device: data.targetDevice ?? undefined,
+    });
 
     if (error) throw new Error(error.message);
     const row = (rows ?? [])[0] as
@@ -75,7 +71,7 @@ export const consumeMlsKeyPackage = createServerFn({ method: 'POST' })
           remaining: number;
         }
       | undefined;
-    if (!row) throw new Error('consume_mls_key_package returned no row');
+    if (!row) throw new Error("consume_mls_key_package returned no row");
     return row;
   });
 
@@ -83,16 +79,15 @@ export const consumeMlsKeyPackage = createServerFn({ method: 'POST' })
 // mls_key_package_directory_status
 // ---------------------------------------------------------------------------
 
-export const getMlsDirectoryStatus = createServerFn({ method: 'GET' })
+export const getMlsDirectoryStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: { deviceId: string }) =>
     z.object({ deviceId: z.string().uuid() }).parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { data: rows, error } = await context.supabase.rpc(
-      'mls_key_package_directory_status',
-      { target_device: data.deviceId },
-    );
+    const { data: rows, error } = await context.supabase.rpc("mls_key_package_directory_status", {
+      target_device: data.deviceId,
+    });
     if (error) throw new Error(error.message);
     const row = (rows ?? [])[0] as
       | { remaining: number; oldest_expires_at: string | null; newest_created_at: string | null }
@@ -122,14 +117,14 @@ export async function assertConsumedKeyPackageIntegrity(row: {
   const bytes = base64ToBytes(row.key_package_b64);
   const buf = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buf).set(bytes);
-  const digest = await crypto.subtle.digest('SHA-256', buf);
+  const digest = await crypto.subtle.digest("SHA-256", buf);
   const hex = Array.from(new Uint8Array(digest))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
   if (hex !== row.key_package_hash) {
     throw new Error(
-      'key_package_substitution_detected: server-returned bytes do not match declared hash',
+      "key_package_substitution_detected: server-returned bytes do not match declared hash",
     );
   }
 }

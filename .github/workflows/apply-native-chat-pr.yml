@@ -1,0 +1,25 @@
+name: apply native chat patch from PR
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: whispr/e2ee-phase-b
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Apply asserted patch
+        run: python scripts/apply_native_chat_patch.py
+      - name: Format patched files
+        run: bun x prettier --write src/routes/_authenticated/app.tsx src/lib/native-mls-client.ts
+      - name: Typecheck
+        run: bun x tsc --noEmit

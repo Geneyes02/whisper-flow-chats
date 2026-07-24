@@ -28,34 +28,23 @@ jobs:
         working-directory: desktop/src-tauri/crypto-host
     steps:
       - uses: actions/checkout@v4
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: desktop/src-tauri
-
-      # Linux SecretService backing for `keyring` in CI.
       - name: Install libsecret (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libsecret-1-dev
-
       - name: rustfmt
         run: cargo fmt --all -- --check
-
       - name: clippy (stub backend, deny warnings)
         run: cargo clippy --no-default-features --features backend-stub --all-targets -- -D warnings
-
       - name: test (stub backend)
         run: cargo test --no-default-features --features backend-stub -- --nocapture
-
-      # Guardrail: prove the crate refuses to compile with no backend
-      # selected. If this step succeeds, the compile_error! in lib.rs is
-      # broken and CI must fail.
       - name: guardrail — no backend must fail to build
         shell: bash
         run: |
@@ -74,46 +63,52 @@ jobs:
         working-directory: desktop/src-tauri/crypto-host
     steps:
       - uses: actions/checkout@v4
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: desktop/src-tauri
-
       - name: Install libsecret (Linux)
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libsecret-1-dev
-
       - name: Install cargo-audit + cargo-deny
         run: cargo install --locked cargo-audit cargo-deny
-
       - name: Resolve openmls feature (generates Cargo.lock entries)
         run: cargo check --no-default-features --features backend-openmls
-
-      # Fail-closed against RUSTSEC advisories affecting the pinned
-      # openmls/openmls_rust_crypto/openmls_traits graph. If this reports
-      # any vulnerability, Phase B lifecycle work is blocked until the
-      # pin is bumped and docs/OPENMLS-BASELINE.md is updated.
       - name: cargo audit
         working-directory: desktop/src-tauri
-        run: cargo audit --deny warnings
-
-      # License / source / bans policy is enforced by desktop/src-tauri/deny.toml.
-      # Absence of that file is intentional today (no openmls feature is
-      # activated in default builds). Add + commit deny.toml in the PR that
-      # actually flips backend-openmls on.
-      - name: cargo deny (if configured)
-        working-directory: desktop/src-tauri
+        shell: bash
         run: |
+          set +e
+          cargo audit --deny warnings > /tmp/cargo-audit.log 2>&1
+          status=$?
+          cat /tmp/cargo-audit.log
+          exit $status
+      - name: cargo deny (if configured)
+        if: always()
+        working-directory: desktop/src-tauri
+        shell: bash
+        run: |
+          set +e
           if [ -f deny.toml ]; then
-            cargo deny check licenses bans sources
+            cargo deny check licenses bans sources > /tmp/cargo-deny.log 2>&1
+            status=$?
+            cat /tmp/cargo-deny.log
+            exit $status
           else
-            echo "deny.toml not present yet — skipping (see docs/OPENMLS-BASELINE.md)"
+            echo "deny.toml not present yet — skipping (see docs/OPENMLS-BASELINE.md)" | tee /tmp/cargo-deny.log
           fi
-
+      - name: Upload audit diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmls-audit-diagnostics
+          path: |
+            /tmp/cargo-audit.log
+            /tmp/cargo-deny.log
+          if-no-files-found: warn
       - name: Upload resolved Cargo.lock
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cargo-lock-openmls
@@ -135,10 +130,6 @@ jobs:
           workspaces: desktop/src-tauri
       - name: Install libsecret (Linux)
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libsecret-1-dev
-
-      # Slice 1 gate: openmls backend must build clean and every Slice 1
-      # test in src/backend/openmls.rs must pass. If this job is red,
-      # Slice 2 is blocked.
       - name: clippy (openmls backend, deny warnings)
         run: cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings
       - name: test (openmls backend)
@@ -160,16 +151,69 @@ jobs:
           workspaces: desktop/src-tauri
       - name: Install libsecret (Linux)
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libsecret-1-dev
-
-      # Slice 2 gate: adversarial KeyPackage-lifecycle tests must pass.
-      # Runs exactly the same `cargo test` binary as Slice 1 (the two
-      # slices live in one crate), but pinned to the `s2_` test filter
-      # so a Slice-2 regression is attributed directly. Slice 1 tests
-      # still gate green in the `openmls-slice1` job.
       - name: clippy (openmls backend, deny warnings)
         run: cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings
       - name: test — Slice 2 lifecycle (backend-openmls)
         run: cargo test --no-default-features --features backend-openmls s2_ -- --nocapture
 
-
-
+  openmls-diagnostics:
+    name: openmls diagnostics (concise failure tail)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop/src-tauri/crypto-host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install libsecret (Linux)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev >/dev/null
+      - name: rustfmt diagnostic
+        id: fmt
+        shell: bash
+        run: |
+          set +e
+          cargo fmt --all -- --check > /tmp/fmt.log 2>&1
+          status=$?
+          tail -n 80 /tmp/fmt.log
+          exit $status
+      - name: openmls compile diagnostic
+        id: check
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          cargo check --no-default-features --features backend-openmls > /tmp/check.log 2>&1
+          status=$?
+          tail -n 120 /tmp/check.log
+          exit $status
+      - name: strict clippy diagnostic (stub)
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          cargo clippy --no-default-features --features backend-stub --all-targets -- -D warnings > /tmp/clippy-stub.log 2>&1
+          status=$?
+          tail -n 120 /tmp/clippy-stub.log
+          exit $status
+      - name: strict clippy diagnostic (openmls)
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings > /tmp/clippy-openmls.log 2>&1
+          status=$?
+          tail -n 160 /tmp/clippy-openmls.log
+          exit $status
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmls-diagnostics
+          path: |
+            /tmp/fmt.log
+            /tmp/check.log
+            /tmp/clippy-stub.log
+            /tmp/clippy-openmls.log
+          if-no-files-found: warn

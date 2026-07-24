@@ -40,7 +40,7 @@ pub const MAX_CIPHERTEXT_LEN: usize = 16 * 1024 * 1024;
 pub const MAX_AAD_LEN: usize = 64 * 1024;
 
 /// Maximum plaintext length accepted by `encrypt`, in bytes.
-pub const MAX_PLAINTEXT_LEN: usize = 1 * 1024 * 1024;
+pub const MAX_PLAINTEXT_LEN: usize = 1024 * 1024;
 
 /// Current envelope schema version emitted by this host.
 ///
@@ -173,9 +173,10 @@ pub fn validate_id(field: &str, value: &str) -> Result<()> {
             format!("{field}: too long"),
         ));
     }
-    if !value.chars().all(|c| {
-        c.is_ascii_graphic() || c == '-' || c == '_' || c == ':'
-    }) {
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_graphic() || c == '-' || c == '_' || c == ':')
+    {
         return Err(CryptoError::new(
             CryptoErrorCode::Internal,
             format!("{field}: invalid characters"),

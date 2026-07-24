@@ -1,0 +1,102 @@
+name: apply exclusive native crypto backend
+
+on:
+  push:
+    branches: [whispr/e2ee-phase-b]
+    paths:
+      - '.github/workflows/apply-exclusive-backend-20260724.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-prove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: whispr/e2ee-phase-b
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install Linux keychain dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev
+      - name: Patch feature wiring with assertions
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          cargo = Path('desktop/src-tauri/Cargo.toml')
+          s = cargo.read_text()
+          old_dep = 'whispr-crypto-host = { path = "crypto-host", default-features = false, features = ["backend-stub"] }'
+          new_dep = 'whispr-crypto-host = { path = "crypto-host", default-features = false }'
+          if old_dep in s:
+              s = s.replace(old_dep, new_dep, 1)
+          elif new_dep not in s:
+              raise SystemExit('unexpected whispr-crypto-host dependency shape')
+
+          old_default = 'default = []'
+          if old_default in s:
+              s = s.replace(old_default, 'default = ["stub"]', 1)
+          elif 'default = ["stub"]' not in s and 'default = ["openmls"]' not in s:
+              raise SystemExit('unexpected desktop default feature shape')
+
+          if 'stub = ["whispr-crypto-host/backend-stub"]' not in s:
+              anchor = '[features]\n'
+              if anchor not in s:
+                  raise SystemExit('missing [features]')
+              s = s.replace(anchor, anchor + 'stub = ["whispr-crypto-host/backend-stub"]\n', 1)
+          cargo.write_text(s)
+
+          lib = Path('desktop/src-tauri/crypto-host/src/lib.rs')
+          t = lib.read_text()
+          marker = '// Compile-time guard: reject multiple crypto backends.'
+          if marker not in t:
+              block = '''\n// Compile-time guard: reject multiple crypto backends. Exactly one backend\n// must be selected so a release can never silently prefer the stub.\n#[cfg(any(\n    all(feature = "backend-stub", feature = "backend-openmls"),\n    all(feature = "backend-stub", feature = "backend-libsignal"),\n    all(feature = "backend-openmls", feature = "backend-libsignal")\n))]\ncompile_error!("whispr-crypto-host: multiple backend features selected; enable exactly one backend");\n'''
+              insert_at = t.find('// Compile-time guard: exactly one backend must be selected.')
+              if insert_at < 0:
+                  raise SystemExit('missing existing backend guard')
+              t = t[:insert_at] + block + '\n' + t[insert_at:]
+              lib.write_text(t)
+          PY
+      - name: Format
+        run: cargo fmt --manifest-path desktop/src-tauri/Cargo.toml --all
+      - name: Prove explicit OpenMLS desktop build contains no stub feature
+        run: cargo check --manifest-path desktop/src-tauri/Cargo.toml --no-default-features --features openmls
+      - name: Prove explicit stub build still works
+        run: cargo check --manifest-path desktop/src-tauri/Cargo.toml --no-default-features --features stub
+      - name: Prove zero backend is rejected
+        shell: bash
+        run: |
+          set +e
+          cargo check --manifest-path desktop/src-tauri/Cargo.toml --no-default-features >/tmp/no-backend.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+      - name: Prove multiple backends are rejected
+        shell: bash
+        run: |
+          set +e
+          cargo check --manifest-path desktop/src-tauri/Cargo.toml --no-default-features --features 'stub,openmls' >/tmp/multi-backend.log 2>&1
+          rc=$?
+          set -e
+          test "$rc" -ne 0
+      - name: OpenMLS crypto-host suite
+        working-directory: desktop/src-tauri/crypto-host
+        run: |
+          cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings
+          cargo test --no-default-features --features backend-openmls -- --nocapture
+      - name: Commit proven patch
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add desktop/src-tauri/Cargo.toml desktop/src-tauri/crypto-host/src/lib.rs
+          if git diff --cached --quiet; then
+            echo 'No changes required.'
+            exit 0
+          fi
+          git commit -m 'fix(e2ee): enforce exclusive native crypto backend'
+          git push origin HEAD:whispr/e2ee-phase-b

@@ -1,0 +1,51 @@
+name: apply OpenMLS persistence fix
+
+on:
+  pull_request:
+    paths:
+      - "scripts/apply_openmls_persistence_patch.py"
+      - ".github/workflows/apply-openmls-persistence-pr.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Install libsecret
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev >/dev/null
+      - name: Apply asserted persistence patch
+        run: python scripts/apply_openmls_persistence_patch.py
+      - name: Format
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo fmt --all
+      - name: Compile OpenMLS backend
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo check --no-default-features --features backend-openmls
+      - name: Run unchanged OpenMLS runtime tests
+        working-directory: desktop/src-tauri/crypto-host
+        run: cargo test --no-default-features --features backend-openmls rt_ -- --nocapture
+      - name: Commit if green
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "persistence patch already applied"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add desktop/src-tauri/crypto-host/src/backend/openmls_runtime.rs
+          git commit -m "fix(e2ee): persist OpenMLS group state across runtime transitions"
+          git push origin HEAD:${{ github.head_ref }}

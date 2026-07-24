@@ -23,9 +23,9 @@ use std::thread;
 use whispr_crypto_host::{
     conformance::{run_host_invariants, Capability},
     error::CryptoErrorCode,
-    keychain::{MemoryStore, Slot},
-    CryptoHost, EncryptedEnvelope, EnvelopeKind, LockState, ProvisioningState,
-    ENVELOPE_VERSION, MAX_ID_LEN,
+    keychain::{MemoryStore, SecureStore, Slot},
+    CryptoHost, EncryptedEnvelope, EnvelopeKind, LockState, ProvisioningState, ENVELOPE_VERSION,
+    MAX_ID_LEN,
 };
 
 fn host() -> CryptoHost {
@@ -66,6 +66,7 @@ fn prekey_bundle_contains_only_public_material() {
     );
 }
 
+#[cfg(feature = "backend-stub")]
 #[test]
 fn stub_backend_refuses_to_encrypt() {
     let h = host();
@@ -74,6 +75,7 @@ fn stub_backend_refuses_to_encrypt() {
     assert_eq!(err.code, CryptoErrorCode::Unsupported);
 }
 
+#[cfg(feature = "backend-stub")]
 #[test]
 fn stub_backend_refuses_to_establish_session() {
     let h = host();
@@ -260,7 +262,10 @@ fn wipe_returns_to_uninitialized() {
     let h = host();
     h.create_identity().unwrap();
     h.wipe().unwrap();
-    assert!(matches!(h.status().provisioning, ProvisioningState::Uninitialized));
+    assert!(matches!(
+        h.status().provisioning,
+        ProvisioningState::Uninitialized
+    ));
     assert!(h.load_identity().unwrap().is_none());
 }
 
@@ -272,8 +277,11 @@ fn logout_wipes_all_slots() {
     h.publish_prekeys(2).unwrap();
     h.logout().unwrap();
     for slot in Slot::ALL {
-        assert!(store.get(*slot).unwrap().is_none(),
-            "slot {:?} was not cleared", slot);
+        assert!(
+            store.get(*slot).unwrap().is_none(),
+            "slot {:?} was not cleared",
+            slot
+        );
     }
 }
 
@@ -291,7 +299,10 @@ fn status_reports_revoked_after_revoke() {
     let h = host();
     h.create_identity().unwrap();
     h.revoke_device().unwrap();
-    assert!(matches!(h.status().provisioning, ProvisioningState::Revoked));
+    assert!(matches!(
+        h.status().provisioning,
+        ProvisioningState::Revoked
+    ));
 }
 
 // ---------------------------------------------------------------------
@@ -318,7 +329,10 @@ fn missing_slots_are_not_errors() {
     // succeed and report Uninitialized.
     let h = host();
     assert!(h.load_identity().unwrap().is_none());
-    assert!(matches!(h.status().provisioning, ProvisioningState::Uninitialized));
+    assert!(matches!(
+        h.status().provisioning,
+        ProvisioningState::Uninitialized
+    ));
 }
 
 // ---------------------------------------------------------------------
@@ -340,7 +354,9 @@ fn concurrent_publish_prekeys_does_not_deadlock() {
             }
         }));
     }
-    for h in handles { h.join().unwrap(); }
+    for h in handles {
+        h.join().unwrap();
+    }
     // Identity remained stable.
     let id = h.load_identity().unwrap().unwrap();
     assert!(!id.device_id.is_empty());
@@ -350,6 +366,7 @@ fn concurrent_publish_prekeys_does_not_deadlock() {
 // Backend conformance
 // ---------------------------------------------------------------------
 
+#[cfg(feature = "backend-stub")]
 #[test]
 fn stub_backend_passes_host_invariants() {
     let report = run_host_invariants(Capability::NonMessaging);
@@ -360,6 +377,21 @@ fn stub_backend_passes_host_invariants() {
             }
         }
         panic!("stub backend failed host invariant conformance");
+    }
+    assert!(!report.backend.is_empty());
+}
+
+#[cfg(feature = "backend-openmls")]
+#[test]
+fn openmls_backend_passes_host_invariants() {
+    let report = run_host_invariants(Capability::Messaging);
+    if !report.all_passed() {
+        for c in &report.checks {
+            if !c.passed {
+                eprintln!("FAIL {}: {} — {:?}", c.id, c.description, c.detail);
+            }
+        }
+        panic!("OpenMLS backend failed host invariant conformance");
     }
     assert!(!report.backend.is_empty());
 }

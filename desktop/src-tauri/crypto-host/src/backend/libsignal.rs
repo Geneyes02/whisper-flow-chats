@@ -37,14 +37,34 @@ impl LibsignalBackend {
 }
 
 impl CryptoBackend for LibsignalBackend {
-    fn name(&self) -> &'static str { "libsignal-v1" }
-    fn create_identity(&self) -> Result<DeviceIdentity> { Err(CryptoError::unsupported("libsignal: create_identity")) }
-    fn load_identity(&self) -> Result<Option<DeviceIdentity>> { Err(CryptoError::unsupported("libsignal: load_identity")) }
-    fn revoke_device(&self) -> Result<()> { Err(CryptoError::unsupported("libsignal: revoke_device")) }
-    fn publish_prekeys(&self, _count: u32) -> Result<PrekeyBundle> { Err(CryptoError::unsupported("libsignal: publish_prekeys")) }
-    fn establish_session(&self, _b: PrekeyBundle) -> Result<()> { Err(CryptoError::unsupported("libsignal: establish_session")) }
-    fn rotate_session(&self, _r: &str) -> Result<()> { Err(CryptoError::unsupported("libsignal: rotate_session")) }
-    fn encrypt(&self, _r: &str, _p: &[u8], _aad: &[u8]) -> Result<EncryptedEnvelope> { Err(CryptoError::unsupported("libsignal: encrypt")) }
-    fn decrypt(&self, _e: &EncryptedEnvelope) -> Result<Vec<u8>> { Err(CryptoError::unsupported("libsignal: decrypt")) }
-    fn safety_number(&self, _p: &[u8]) -> Result<SafetyNumber> { Err(CryptoError::unsupported("libsignal: safety_number")) }
+    fn name(&self) -> &'static str {
+        "libsignal-v1"
+    }
+    fn create_identity(&self) -> Result<DeviceIdentity> {
+        Err(CryptoError::unsupported("libsignal: create_identity"))
+    }
+    fn load_identity(&self) -> Result<Option<DeviceIdentity>> {
+        Err(CryptoError::unsupported("libsignal: load_identity"))
+    }
+    fn revoke_device(&self) -> Result<()> {
+        Err(CryptoError::unsupported("libsignal: revoke_device"))
+    }
+    fn publish_prekeys(&self, _count: u32) -> Result<PrekeyBundle> {
+        Err(CryptoError::unsupported("libsignal: publish_prekeys"))
+    }
+    fn establish_session(&self, _b: PrekeyBundle) -> Result<()> {
+        Err(CryptoError::unsupported("libsignal: establish_session"))
+    }
+    fn rotate_session(&self, _r: &str) -> Result<()> {
+        Err(CryptoError::unsupported("libsignal: rotate_session"))
+    }
+    fn encrypt(&self, _r: &str, _p: &[u8], _aad: &[u8]) -> Result<EncryptedEnvelope> {
+        Err(CryptoError::unsupported("libsignal: encrypt"))
+    }
+    fn decrypt(&self, _e: &EncryptedEnvelope) -> Result<Vec<u8>> {
+        Err(CryptoError::unsupported("libsignal: decrypt"))
+    }
+    fn safety_number(&self, _p: &[u8]) -> Result<SafetyNumber> {
+        Err(CryptoError::unsupported("libsignal: safety_number"))
+    }
 }

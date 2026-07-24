@@ -13,54 +13,38 @@ use crate::types::{DeviceIdentity, EncryptedEnvelope, PrekeyBundle, SafetyNumber
 /// Implementations MUST fail closed: any error path returns
 /// [`crate::CryptoError`] rather than emitting a fallback payload.
 pub trait CryptoBackend: Send + Sync {
-    /// Backend identifier — appears in envelopes and snapshots so we can
-    /// detect cross-backend confusion at load time.
+    /// Return the implementation identifier written into persisted state and envelopes.
     fn name(&self) -> &'static str;
 
-    /// Protocol identifier the backend implements. Reported in the
-    /// [`EncryptedEnvelope::protocol_id`] field and in
-    /// [`crate::api::BackendInfo`]. Default: `"whispr-none"` for backends
-    /// that intentionally do not carry a real protocol (e.g. the stub).
-    fn protocol_id(&self) -> &'static str { "whispr-none" }
+    /// Return the protocol profile identifier carried by encrypted envelopes.
+    fn protocol_id(&self) -> &'static str {
+        "whispr-none"
+    }
 
-    /// Protocol version the backend implements. Default: 0.
-    fn protocol_version(&self) -> u16 { 0 }
+    /// Return the backend-defined protocol profile version.
+    fn protocol_version(&self) -> u16 {
+        0
+    }
 
-    // ---- identity ------------------------------------------------------
-
-    /// Generate a new device identity, persist it, and return the public
-    /// portion. Idempotent: calling twice returns the same identity as long
-    /// as the local store is intact.
+    /// Create and persist the local device identity, or return the existing one.
     fn create_identity(&self) -> Result<DeviceIdentity>;
 
-    /// Load the persisted identity if one exists.
+    /// Load the public view of the persisted local device identity.
     fn load_identity(&self) -> Result<Option<DeviceIdentity>>;
 
-    /// Mark this device as revoked. Every subsequent call MUST fail with
-    /// [`CryptoErrorCode::DeviceRevoked`](crate::error::CryptoErrorCode::DeviceRevoked).
+    /// Revoke this device locally and make future cryptographic operations fail closed.
     fn revoke_device(&self) -> Result<()>;
 
-    // ---- prekeys -------------------------------------------------------
-
-    /// Generate and persist `count` one-time prekeys plus a fresh signed
-    /// prekey, returning the public bundle to publish to the directory.
+    /// Generate publishable one-time prekeys or MLS KeyPackages.
     fn publish_prekeys(&self, count: u32) -> Result<PrekeyBundle>;
 
-    // ---- sessions ------------------------------------------------------
-
-    /// Establish a session with a peer given their published prekey bundle.
-    /// A no-op if a session already exists with the same identity key;
-    /// returns `IdentityMismatch` if the peer's identity key changed.
+    /// Establish a cryptographic session from a peer's authenticated public bundle.
     fn establish_session(&self, bundle: PrekeyBundle) -> Result<()>;
 
-    /// Rotate the session with a peer (fresh ratchet chain).
+    /// Advance/heal an existing session with the named peer device.
     fn rotate_session(&self, recipient_device_id: &str) -> Result<()>;
 
-    // ---- messaging -----------------------------------------------------
-
-    /// Encrypt `plaintext` for `recipient_device_id`. `aad` is bound into
-    /// the AEAD tag so tampering with routing metadata invalidates the
-    /// ciphertext.
+    /// Encrypt application plaintext for a recipient and authenticate the supplied AAD.
     fn encrypt(
         &self,
         recipient_device_id: &str,
@@ -68,17 +52,12 @@ pub trait CryptoBackend: Send + Sync {
         aad: &[u8],
     ) -> Result<EncryptedEnvelope>;
 
-    /// Decrypt an envelope. Returns `BadCiphertext` on authentication
-    /// failure; MUST NOT return partially recovered plaintext.
+    /// Authenticate and decrypt an inbound encrypted envelope.
     fn decrypt(&self, envelope: &EncryptedEnvelope) -> Result<Vec<u8>>;
 
-    // ---- verification --------------------------------------------------
-
-    /// Compute the safety number for a peer's identity public key.
+    /// Produce the deterministic verification fingerprint for a peer identity key.
     fn safety_number(&self, peer_identity_public_key: &[u8]) -> Result<SafetyNumber>;
 }
-
-// ---- backend selector --------------------------------------------------
 
 #[cfg(feature = "backend-stub")]
 pub mod stub;
@@ -86,23 +65,25 @@ pub mod stub;
 #[cfg(feature = "backend-libsignal")]
 pub mod libsignal;
 
+/// Native MLS runtime. This is the only OpenMLS implementation compiled by
+/// `backend-openmls`. The earlier Slice 1/2 prototype adapter is intentionally
+/// no longer compiled because it serialized OpenMLS private structs through
+/// APIs that are not part of OpenMLS 0.8.1's supported wire surface. Its
+/// lifecycle/security regressions have moved into `openmls_runtime` so the
+/// CI gates exercise the same implementation that will carry real messages.
 #[cfg(feature = "backend-openmls")]
-pub mod openmls;
+#[allow(missing_docs, clippy::unnecessary_to_owned)]
+pub mod openmls_runtime;
 
-/// Build the backend selected by Cargo features.
-///
-/// Exactly one backend feature is active (enforced by `lib.rs`). The
-/// backend uses `store` for all persistent secret material.
-///
-/// Precedence when more than one backend feature is compiled in (e.g. a
-/// developer local build): `backend-openmls` > `backend-libsignal` >
-/// `backend-stub`. Default project builds ship only `backend-stub`.
+/// Construct the backend selected by Cargo features using the supplied secret store.
 pub fn build_default_backend(
     store: std::sync::Arc<dyn crate::keychain::SecureStore>,
 ) -> Result<Box<dyn CryptoBackend>> {
     #[cfg(feature = "backend-openmls")]
     {
-        return Ok(Box::new(openmls::OpenMlsBackend::new(store)?));
+        return Ok(Box::new(openmls_runtime::OpenMlsRuntimeBackend::new(
+            store,
+        )?));
     }
 
     #[cfg(all(feature = "backend-libsignal", not(feature = "backend-openmls")))]
@@ -119,8 +100,8 @@ pub fn build_default_backend(
         return Ok(Box::new(stub::StubBackend::new(store)?));
     }
 
-    // Unreachable — lib.rs compile_error guards this, but keep an explicit
-    // fail-closed path.
     #[allow(unreachable_code)]
-    Err(crate::error::CryptoError::unsupported("no backend selected"))
+    Err(crate::error::CryptoError::unsupported(
+        "no backend selected",
+    ))
 }

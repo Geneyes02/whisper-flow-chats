@@ -40,13 +40,12 @@ pub struct Snapshot {
 
 impl Snapshot {
     /// Serialize + persist a snapshot into `slot`.
-    pub fn save(
-        store: &dyn SecureStore,
-        slot: Slot,
-        backend: &str,
-        payload: String,
-    ) -> Result<()> {
-        let snap = Snapshot { version: SNAPSHOT_VERSION, backend: backend.to_string(), payload };
+    pub fn save(store: &dyn SecureStore, slot: Slot, backend: &str, payload: String) -> Result<()> {
+        let snap = Snapshot {
+            version: SNAPSHOT_VERSION,
+            backend: backend.to_string(),
+            payload,
+        };
         let json = serde_json::to_string(&snap)
             .map_err(|_| CryptoError::internal("snapshot serialize"))?;
         store.put(slot, &json)
@@ -60,7 +59,9 @@ impl Snapshot {
         slot: Slot,
         expected_backend: &str,
     ) -> Result<Option<Snapshot>> {
-        let Some(raw) = store.get(slot)? else { return Ok(None) };
+        let Some(raw) = store.get(slot)? else {
+            return Ok(None);
+        };
         let snap: Snapshot = serde_json::from_str(&raw)
             .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "snapshot parse"))?;
         if snap.version != SNAPSHOT_VERSION {

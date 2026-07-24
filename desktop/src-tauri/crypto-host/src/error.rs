@@ -51,12 +51,18 @@ pub struct CryptoError {
 impl CryptoError {
     /// Build an error with a stable code and a safe generic message.
     pub fn new(code: CryptoErrorCode, message: impl Into<String>) -> Self {
-        Self { code, message: message.into() }
+        Self {
+            code,
+            message: message.into(),
+        }
     }
 
     /// Convenience: unsupported operation.
     pub fn unsupported(op: &str) -> Self {
-        Self::new(CryptoErrorCode::Unsupported, format!("operation not supported: {op}"))
+        Self::new(
+            CryptoErrorCode::Unsupported,
+            format!("operation not supported: {op}"),
+        )
     }
 
     /// Convenience: internal invariant. Message is safe-generic.
@@ -79,7 +85,10 @@ pub struct WireError {
 
 impl From<CryptoError> for WireError {
     fn from(e: CryptoError) -> Self {
-        WireError { code: e.code, message: e.message }
+        WireError {
+            code: e.code,
+            message: e.message,
+        }
     }
 }
 
