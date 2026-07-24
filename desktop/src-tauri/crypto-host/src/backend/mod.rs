@@ -72,7 +72,7 @@ pub mod libsignal;
 /// lifecycle/security regressions have moved into `openmls_runtime` so the
 /// CI gates exercise the same implementation that will carry real messages.
 #[cfg(feature = "backend-openmls")]
-#[allow(missing_docs)]
+#[allow(missing_docs, clippy::unnecessary_to_owned)]
 pub mod openmls_runtime;
 
 /// Construct the backend selected by Cargo features using the supplied secret store.
