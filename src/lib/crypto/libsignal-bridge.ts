@@ -55,8 +55,12 @@ async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Prom
     );
   }
   try {
+    // Runtime-only import. String is a variable so the web build's type
+    // checker and bundler do not try to resolve `@tauri-apps/api/core`
+    // (it's a desktop-only dep, added under `desktop/`, not this package).
+    const tauriModuleId = '@tauri-apps/api/core';
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mod: any = await import(/* @vite-ignore */ '@tauri-apps/api/core');
+    const mod: any = await import(/* @vite-ignore */ tauriModuleId);
     return (await mod.invoke(cmd, args)) as T;
   } catch (err) {
     // Never leak error internals — remap everything to unsupported so the
