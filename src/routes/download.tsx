@@ -32,11 +32,10 @@ function detectPlatform(): Platform {
   return "other";
 }
 
-// Latest signed macOS release. Replace with your GitHub release asset URL after
-// the first tagged build completes (or leave pointing at /latest/download for
-// auto-latest).
+// Latest signed macOS release. Replace OWNER/REPO with your actual GitHub
+// owner/repo if it differs from the default below.
 const MAC_DMG_URL =
-  "https://github.com/OWNER/REPO/releases/latest/download/Whispr.dmg";
+  "https://github.com/whispr/whispr/releases/latest/download/Whispr.dmg";
 
 function DownloadPage() {
   const [platform, setPlatform] = useState<Platform>("other");
