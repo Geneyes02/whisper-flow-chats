@@ -1,0 +1,42 @@
+name: apply native chat patch from PR
+
+on:
+  pull_request:
+    paths:
+      - "scripts/apply_native_chat_patch.py"
+      - ".github/workflows/apply-native-chat-pr.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Apply asserted patch
+        run: python scripts/apply_native_chat_patch.py
+      - name: Format patched files
+        run: bun x prettier --write src/routes/_authenticated/app.tsx src/lib/native-mls-client.ts
+      - name: Typecheck
+        run: bun x tsc --noEmit
+      - name: Commit integration if changed
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "native chat integration already applied"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/_authenticated/app.tsx src/lib/native-mls-client.ts
+          git commit -m "feat(e2ee): route native direct chats through MLS"
+          git push origin HEAD:${{ github.head_ref }}
