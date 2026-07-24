@@ -396,9 +396,9 @@ export const createGroupConversation = createServerFn({ method: "POST" })
 
     const unique = Array.from(new Set([userId, ...data.memberIds]));
     const rows = unique.map((uid) => ({
-      conversation_id: conv.id,
+      conversation_id: conv.id as string,
       user_id: uid,
-      role: uid === userId ? "owner" : "member",
+      role: (uid === userId ? "owner" : "member") as "owner" | "member",
     }));
     const { error: memErr } = await supabaseAdmin.from("conversation_members").insert(rows);
     if (memErr) throw memErr;
