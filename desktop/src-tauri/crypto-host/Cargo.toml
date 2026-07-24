@@ -5,33 +5,9 @@ edition = "2021"
 description = "Whispr native crypto host — swappable backend behind a stable command surface"
 license = "MIT OR Apache-2.0"
 
-# ------------------------------------------------------------------------
-# Backend selection
-# ------------------------------------------------------------------------
-# The Whispr application ONLY talks to this crate via the `CryptoBackend`
-# trait + the `whispr_crypto_*` command shims in the Tauri app. The concrete
-# implementation is chosen at build time by cargo feature:
-#
-#   backend-stub       — deterministic fail-closed backend. Used by CI, unit
-#                        tests, and any build where a production crypto
-#                        provider is not licensed / not desired.
-#   backend-libsignal  — reserved scaffold only. No libsignal dependency is
-#                        present in the graph; DO NOT enable for production.
-#                        See docs/ADR-LIBSIGNAL-LICENSING.md.
-#   backend-openmls    — MLS (RFC 9420) via openmls + openmls_rust_crypto.
-#                        Production-candidate implementation is gated by the
-#                        Phase B conformance and server-blindness suites.
-#
-# Exactly one backend must be selected. If none is selected, the crate
-# refuses to compile so we never accidentally ship an unencrypted build.
-# ------------------------------------------------------------------------
-
 [features]
 default = ["backend-stub"]
 backend-stub = []
-# Reserved feature for the fail-closed adapter in backend/libsignal.rs.
-# Keeping this dependency-free prevents an unavailable placeholder crate from
-# poisoning Cargo resolution for the OpenMLS build.
 backend-libsignal = []
 backend-openmls = [
     "dep:openmls",
@@ -51,10 +27,11 @@ sha2          = "0.10"
 hex           = "0.4"
 parking_lot   = "0.12"
 base64        = "0.22"
+aes-gcm       = "=0.11.0"
 
 # OS keychain (macOS Keychain / Windows Credential Manager / Linux
 # SecretService via libsecret). This is the ONLY persistent sink used by the
-# crypto host for device and session secret snapshots.
+# crypto host for device and session secret snapshots / local-cache seal key.
 keyring       = "3"
 
 # Backend-openmls — gated. Pinned to the post-audit baseline documented in
