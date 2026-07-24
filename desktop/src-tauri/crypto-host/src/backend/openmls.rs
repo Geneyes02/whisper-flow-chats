@@ -867,5 +867,237 @@ mod tests {
             );
         }
     }
+
+    // ==================================================================
+    // Slice 2 tests — KeyPackage lifecycle
+    // ==================================================================
+    //
+    // Every test constructs a fresh backend and never touches Slice 1
+    // behavior directly. Adversarial cases required by the Slice 2
+    // brief map 1:1 onto the tests below.
+
+    /// Helper: peer backend on an independent SecureStore so we can
+    /// generate a valid KeyPackage from a *different* device and feed
+    /// it into `validate_peer_keypackage` on `alice`.
+    fn peer_with_identity() -> (OpenMlsBackend, DeviceIdentity, Vec<u8>) {
+        let store: Arc<dyn SecureStore> = Arc::new(MemoryStore::new());
+        let b = OpenMlsBackend::new(store).unwrap();
+        let id = b.create_identity().unwrap();
+        let bundle = b.publish_prekeys(1).unwrap();
+        let wire = decode_b64(&bundle.one_time_prekeys[0].public_key).unwrap();
+        (b, id, wire)
+    }
+
+    #[test]
+    fn s2_replenish_from_empty_reaches_target() {
+        let b = fresh();
+        b.create_identity().unwrap();
+        assert_eq!(b.remaining_keypackages().unwrap(), 0);
+        assert!(b.needs_replenishment().unwrap());
+        let added = b.replenish_keypackages().unwrap();
+        assert_eq!(added, REPLENISH_TARGET);
+        assert_eq!(b.remaining_keypackages().unwrap(), REPLENISH_TARGET);
+        assert!(!b.needs_replenishment().unwrap());
+        // Idempotent at the target — no double-generation.
+        assert_eq!(b.replenish_keypackages().unwrap(), 0);
+    }
+
+    #[test]
+    fn s2_replenishment_threshold_is_reachable_by_consumption() {
+        let b = fresh();
+        b.create_identity().unwrap();
+        b.replenish_keypackages().unwrap();
+        // Consume enough to fall below threshold.
+        let pkgs = b.load_keypackages().unwrap();
+        let to_consume = REPLENISH_TARGET - REPLENISH_THRESHOLD + 1;
+        for b64 in pkgs.bundles_tls_b64.iter().take(to_consume as usize) {
+            let bytes = decode_b64(b64).unwrap();
+            let bundle = KeyPackageBundle::tls_deserialize(&mut bytes.as_slice()).unwrap();
+            let public = bundle.key_package().tls_serialize_detached().unwrap();
+            b.consume_local_keypackage(&public).unwrap();
+        }
+        assert!(b.needs_replenishment().unwrap());
+    }
+
+    #[test]
+    fn s2_consume_removes_private_bundle_and_marks_hash() {
+        let b = fresh();
+        b.create_identity().unwrap();
+        let wire_bundle = b.publish_prekeys(2).unwrap();
+        let target = decode_b64(&wire_bundle.one_time_prekeys[0].public_key).unwrap();
+        let hash = sha256_hex(&target);
+
+        b.consume_local_keypackage(&target).unwrap();
+
+        let pkgs = b.load_keypackages().unwrap();
+        assert_eq!(pkgs.bundles_tls_b64.len(), 1, "one bundle should remain");
+        assert!(
+            pkgs.consumed_hashes_hex.contains(&hash),
+            "consumed hash must be recorded"
+        );
+    }
+
+    #[test]
+    fn s2_reused_keypackage_is_rejected_after_consumption() {
+        let b = fresh();
+        b.create_identity().unwrap();
+        let wire_bundle = b.publish_prekeys(2).unwrap();
+        let target = decode_b64(&wire_bundle.one_time_prekeys[0].public_key).unwrap();
+        b.consume_local_keypackage(&target).unwrap();
+        let err = b.consume_local_keypackage(&target).unwrap_err();
+        assert_eq!(err.code, CryptoErrorCode::BadCiphertext);
+    }
+
+    #[test]
+    fn s2_replayed_keypackage_across_reload_is_still_rejected() {
+        let store: Arc<dyn SecureStore> = Arc::new(MemoryStore::new());
+        let b1 = OpenMlsBackend::new(store.clone()).unwrap();
+        b1.create_identity().unwrap();
+        let wire_bundle = b1.publish_prekeys(2).unwrap();
+        let target = decode_b64(&wire_bundle.one_time_prekeys[0].public_key).unwrap();
+        b1.consume_local_keypackage(&target).unwrap();
+        drop(b1);
+
+        // Restart — replay must still fail because the consumed-hash
+        // history is persisted, not just in-memory.
+        let b2 = OpenMlsBackend::new(store).unwrap();
+        let err = b2.consume_local_keypackage(&target).unwrap_err();
+        assert_eq!(err.code, CryptoErrorCode::BadCiphertext);
+    }
+
+    #[test]
+    fn s2_stale_keypackage_never_in_pool_is_rejected() {
+        // Feed a validly-shaped KeyPackage from a *different* device to
+        // consume_local_keypackage on Alice — she has no matching
+        // private bundle so consumption must fail closed.
+        let alice = fresh();
+        alice.create_identity().unwrap();
+        alice.replenish_keypackages().unwrap();
+        let (_peer, _peer_id, peer_wire) = peer_with_identity();
+        let err = alice.consume_local_keypackage(&peer_wire).unwrap_err();
+        assert_eq!(err.code, CryptoErrorCode::BadCiphertext);
+    }
+
+    #[test]
+    fn s2_malformed_keypackage_is_rejected() {
+        let b = fresh();
+        b.create_identity().unwrap();
+        let err = b
+            .validate_peer_keypackage(b"not a keypackage", "peer-device-id")
+            .unwrap_err();
+        assert_eq!(err.code, CryptoErrorCode::BadCiphertext);
+    }
+
+    #[test]
+    fn s2_wrong_device_binding_is_rejected() {
+        // Peer publishes a real KeyPackage; Alice validates it against a
+        // *different* expected device_id → IdentityMismatch.
+        let (_peer, peer_id, peer_wire) = peer_with_identity();
+        let alice = fresh();
+        alice.create_identity().unwrap();
+        let err = alice
+            .validate_peer_keypackage(&peer_wire, "some-other-device")
+            .unwrap_err();
+        assert_eq!(err.code, CryptoErrorCode::IdentityMismatch);
+        // Sanity: with the correct device_id it validates.
+        alice
+            .validate_peer_keypackage(&peer_wire, &peer_id.device_id)
+            .expect("valid peer keypackage");
+    }
+
+    #[test]
+    fn s2_substituted_keypackage_bytes_fail_signature_validation() {
+        // Flip a byte late in the wire form — this corrupts the
+        // signed payload, so KeyPackageIn::validate MUST refuse it.
+        let (_peer, peer_id, mut peer_wire) = peer_with_identity();
+        let last = peer_wire.len() - 1;
+        peer_wire[last] ^= 0xFF;
+        let alice = fresh();
+        alice.create_identity().unwrap();
+        let err = alice
+            .validate_peer_keypackage(&peer_wire, &peer_id.device_id)
+            .unwrap_err();
+        assert_eq!(err.code, CryptoErrorCode::BadCiphertext);
+    }
+
+    #[test]
+    fn s2_valid_peer_keypackage_passes_validation() {
+        let (_peer, peer_id, peer_wire) = peer_with_identity();
+        let alice = fresh();
+        alice.create_identity().unwrap();
+        alice
+            .validate_peer_keypackage(&peer_wire, &peer_id.device_id)
+            .expect("well-formed peer keypackage must validate");
+    }
+
+    #[test]
+    fn s2_revoke_wipes_pool_and_history_and_blocks_replenish() {
+        let b = fresh();
+        b.create_identity().unwrap();
+        b.replenish_keypackages().unwrap();
+        let wire_bundle = b.publish_prekeys(1).unwrap();
+        let target = decode_b64(&wire_bundle.one_time_prekeys[0].public_key).unwrap();
+        b.consume_local_keypackage(&target).unwrap();
+
+        b.revoke_device().unwrap();
+        // The revoked-device wipe clears the pool (Slice 1 behavior).
+        // Reload sees an empty pool AND — because the whole snapshot
+        // slot was cleared — the consumed-hash history is also gone.
+        // That is acceptable: no live private material exists to be
+        // reused, and replenish is blocked below.
+        assert_eq!(b.remaining_keypackages().unwrap(), 0);
+        let err = b.replenish_keypackages().unwrap_err();
+        assert_eq!(err.code, CryptoErrorCode::DeviceRevoked);
+    }
+
+    #[test]
+    fn s2_concurrent_consumption_of_same_package_is_serialized() {
+        use std::thread;
+        let store: Arc<dyn SecureStore> = Arc::new(MemoryStore::new());
+        let b = Arc::new(OpenMlsBackend::new(store).unwrap());
+        b.create_identity().unwrap();
+        let wire_bundle = b.publish_prekeys(1).unwrap();
+        let target = decode_b64(&wire_bundle.one_time_prekeys[0].public_key).unwrap();
+
+        let b1 = b.clone();
+        let t1 = target.clone();
+        let b2 = b.clone();
+        let t2 = target.clone();
+        let h1 = thread::spawn(move || b1.consume_local_keypackage(&t1));
+        let h2 = thread::spawn(move || b2.consume_local_keypackage(&t2));
+        let r1 = h1.join().unwrap();
+        let r2 = h2.join().unwrap();
+
+        // Exactly one succeeds; the other fails closed. Which one wins
+        // is scheduler-dependent — the invariant is `one Ok + one Err`.
+        let oks = [&r1, &r2].iter().filter(|r| r.is_ok()).count();
+        let errs = [&r1, &r2].iter().filter(|r| r.is_err()).count();
+        assert_eq!(oks, 1, "exactly one consume must succeed");
+        assert_eq!(errs, 1, "the other consume must fail closed");
+        assert_eq!(b.remaining_keypackages().unwrap(), 0);
+    }
+
+    #[test]
+    fn s2_wrong_ciphersuite_pool_snapshot_fails_closed() {
+        // Cross-ciphersuite pool must not silently reinterpret bytes.
+        let store: Arc<dyn SecureStore> = Arc::new(MemoryStore::new());
+        let bogus = PersistedKeyPackages {
+            ciphersuite_tag: "MLS_256_DHKEMP384_AES256GCM_SHA384_P384".into(),
+            bundles_tls_b64: vec![],
+            consumed_hashes_hex: vec![],
+        };
+        Snapshot::save(
+            &*store,
+            Slot::PrekeyStore,
+            OPENMLS_BACKEND,
+            serde_json::to_string(&bogus).unwrap(),
+        )
+        .unwrap();
+        let b = OpenMlsBackend::new(store).unwrap();
+        b.create_identity().unwrap();
+        let err = b.remaining_keypackages().unwrap_err();
+        assert_eq!(err.code, CryptoErrorCode::StorageCorrupt);
+    }
 }
+
 
