@@ -160,6 +160,7 @@ impl OpenMlsBackend {
             store,
             provider: OpenMlsRustCrypto::default(),
             identity: Mutex::new(restored),
+            keypackage_lock: Mutex::new(()),
         })
     }
 
