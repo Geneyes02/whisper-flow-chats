@@ -73,6 +73,32 @@ new_application = '''        // Contain upstream OpenMLS panics caused by malfor
         };
 '''
 runtime = replace_once(runtime, old_application, new_application, "application process_message")
+
+# Revocation must take precedence over argument validation so CryptoHost::status
+# can reliably observe the backend's terminal DeviceRevoked state.
+runtime = replace_once(
+    runtime,
+    '''        let _lock = self.mutation_lock.lock();
+        if count == 0 || count > MAX_PREKEYS {
+            return Err(CryptoError::new(
+                CryptoErrorCode::InvalidBundle,
+                "prekey count",
+            ));
+        }
+
+        let id = self.require_identity()?;
+''',
+    '''        let _lock = self.mutation_lock.lock();
+        let id = self.require_identity()?;
+        if count == 0 || count > MAX_PREKEYS {
+            return Err(CryptoError::new(
+                CryptoErrorCode::InvalidBundle,
+                "prekey count",
+            ));
+        }
+''',
+    "revocation precedence",
+)
 runtime_path.write_text(runtime)
 
 seal_path = Path("desktop/src-tauri/crypto-host/src/local_seal.rs")
@@ -122,3 +148,35 @@ panic = "unwind"
     "release panic strategy",
 )
 cargo_path.write_text(cargo)
+
+harness_path = Path("desktop/src-tauri/crypto-host/tests/harness.rs")
+harness = harness_path.read_text()
+for fn_name in [
+    "stub_backend_refuses_to_encrypt",
+    "stub_backend_refuses_to_establish_session",
+    "stub_backend_passes_host_invariants",
+]:
+    marker = f"#[test]\nfn {fn_name}()"
+    replacement = f'#[cfg(feature = "backend-stub")]\n#[test]\nfn {fn_name}()'
+    if replacement not in harness:
+        harness = replace_once(harness, marker, replacement, f"cfg {fn_name}")
+
+openmls_test = '''
+#[cfg(feature = "backend-openmls")]
+#[test]
+fn openmls_backend_passes_host_invariants() {
+    let report = run_host_invariants(Capability::Messaging);
+    if !report.all_passed() {
+        for c in &report.checks {
+            if !c.passed {
+                eprintln!("FAIL {}: {} — {:?}", c.id, c.description, c.detail);
+            }
+        }
+        panic!("OpenMLS backend failed host invariant conformance");
+    }
+    assert!(!report.backend.is_empty());
+}
+'''
+if "fn openmls_backend_passes_host_invariants()" not in harness:
+    harness += openmls_test
+harness_path.write_text(harness)
