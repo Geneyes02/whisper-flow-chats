@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { detectRuntime } from "@/lib/crypto/provider-registry";
 import { utf8 } from "@/lib/crypto/encoding";
 import { receiveNativeMlsMessages, sendNativeMlsMessage } from "@/lib/native-mls-client";
+import { loadNativeHistory } from "@/lib/native-local-history";
 import { getMe } from "@/lib/profile.functions";
 import { searchUsers } from "@/lib/contacts.functions";
 import {
@@ -520,6 +521,30 @@ function ChatPane({
   useEffect(() => {
     inputRef.current?.focus();
   }, [conversation.id]);
+
+  useEffect(() => {
+    if (!isNativeDirect) return;
+    let cancelled = false;
+    void loadNativeHistory(conversation.id)
+      .then((history) => {
+        if (cancelled || history.length === 0) return;
+        setNativeTextByMessageId((previous) => {
+          const next = { ...previous };
+          for (const entry of history) next[entry.messageId] = entry.payload.text;
+          return next;
+        });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setNativeSecurityError(
+            error instanceof Error ? error.message : "Encrypted local history could not be opened",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation.id, isNativeDirect]);
 
   // Native direct-chat inbox. The native receive function only ACKs messages
   // after authenticated MLS decryption. Other-conversation rows stay pending.

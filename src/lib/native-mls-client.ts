@@ -8,6 +8,7 @@
 
 import { getCryptoProvider, detectRuntime } from "./crypto/provider-registry";
 import { CryptoError, type EncryptedEnvelope, type PrekeyBundle } from "./crypto/types";
+import { storeNativeHistoryMessage } from "./native-local-history";
 import { fromBase64, fromPgHex, toBase64, toBase64Url, utf8 } from "./crypto/encoding";
 import {
   assertConsumedKeyPackageIntegrity,
@@ -305,6 +306,18 @@ export async function sendNativeMlsMessage(input: {
     },
   });
 
+  await storeNativeHistoryMessage({
+    conversationId: input.conversationId,
+    messageId,
+    payload: {
+      text: utf8.decode(input.plaintext),
+      senderUserId: local.userId,
+      senderDeviceId: local.deviceId,
+      direction: "sent",
+      createdAt: new Date().toISOString(),
+    },
+  });
+
   return {
     messageId,
     recipientDeviceCount: peerDevices.length,
@@ -351,6 +364,17 @@ export async function receiveNativeMlsMessages(
     try {
       await verifyAndCachePeerIdentity(row.sender_device_id);
       const plaintext = await provider.decryptMessage(wireToEnvelope(row.envelope));
+      await storeNativeHistoryMessage({
+        conversationId: row.conversation_id,
+        messageId: row.message_id,
+        payload: {
+          text: utf8.decode(plaintext),
+          senderUserId: row.sender_user_id,
+          senderDeviceId: row.sender_device_id,
+          direction: row.sender_user_id === local.userId ? "sent" : "received",
+          createdAt: row.created_at,
+        },
+      });
       await ackMlsEnvelope({ data: { envelopeId: row.envelope_id } });
       messages.push({
         envelopeId: row.envelope_id,

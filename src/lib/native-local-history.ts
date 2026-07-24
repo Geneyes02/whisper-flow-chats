@@ -66,7 +66,11 @@ function openDb(): Promise<IDBDatabase> {
 
 async function withStore<T>(
   mode: IDBTransactionMode,
-  operation: (store: IDBObjectStore, resolve: (value: T) => void, reject: (reason?: unknown) => void) => void,
+  operation: (
+    store: IDBObjectStore,
+    resolve: (value: T) => void,
+    reject: (reason?: unknown) => void,
+  ) => void,
 ): Promise<T> {
   const db = await openDb();
   return new Promise<T>((resolve, reject) => {
@@ -103,9 +107,9 @@ export async function storeNativeHistoryMessage(input: {
   });
 }
 
-export async function loadNativeHistory(conversationId: string): Promise<
-  Array<{ messageId: string; payload: NativeHistoryPayload }>
-> {
+export async function loadNativeHistory(
+  conversationId: string,
+): Promise<Array<{ messageId: string; payload: NativeHistoryPayload }>> {
   const records = await withStore<HistoryRecord[]>("readonly", (store, resolve, reject) => {
     const request = store.index("conversationId").getAll(IDBKeyRange.only(conversationId));
     request.onsuccess = () => resolve((request.result ?? []) as HistoryRecord[]);
