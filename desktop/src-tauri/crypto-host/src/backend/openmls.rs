@@ -82,6 +82,28 @@ pub const WHISPR_CIPHERSUITE_TAG: &str =
 /// enforced against caller input to Slice 1's `publish_prekeys`.
 pub const MAX_KEYPACKAGES_PER_CALL: u32 = 100;
 
+// ---- Slice 2 policy knobs ---------------------------------------------
+//
+// KeyPackage lifecycle constants. Tuned to keep the local pool healthy
+// without generating excessive Ed25519 keypairs on every wake.
+
+/// Threshold below which `needs_replenishment` returns true.
+pub const REPLENISH_THRESHOLD: u32 = 10;
+
+/// Target size the local pool is topped up to when replenished.
+pub const REPLENISH_TARGET: u32 = 50;
+
+/// Default KeyPackage lifetime, in seconds. Peers must reject any
+/// KeyPackage whose lifetime does not currently cover "now".
+/// 90 days matches the common MLS deployment default; tuned so
+/// long-idle devices still see valid KeyPackages after a return trip.
+pub const KEYPACKAGE_LIFETIME_SECS: u64 = 60 * 60 * 24 * 90;
+
+/// Upper bound on the size of the consumed-hash history. Old entries
+/// are dropped FIFO; this only trims *already-deleted* private state
+/// history, so trimming cannot leak private material.
+pub const MAX_CONSUMED_HASH_HISTORY: usize = 10_000;
+
 // ---- persisted shapes --------------------------------------------------
 //
 // These structs are the on-disk snapshot payloads. They live in
