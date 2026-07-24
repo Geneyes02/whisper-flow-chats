@@ -189,14 +189,25 @@ DECLARE
   pending_count integer;
   envelope_to_ack uuid;
 BEGIN
-  SELECT count(*), min(envelope_id)
-    INTO pending_count, envelope_to_ack
+  SELECT count(*)
+    INTO pending_count
     FROM public.get_pending_mls_envelopes(
       'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
       100
     );
   IF pending_count <> 1 THEN
     RAISE EXCEPTION 'expected one pending MLS envelope, got %', pending_count;
+  END IF;
+
+  SELECT envelope_id
+    INTO envelope_to_ack
+    FROM public.get_pending_mls_envelopes(
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      100
+    )
+    LIMIT 1;
+  IF envelope_to_ack IS NULL THEN
+    RAISE EXCEPTION 'pending MLS envelope id missing';
   END IF;
 
   IF NOT public.ack_mls_envelope(envelope_to_ack) THEN
