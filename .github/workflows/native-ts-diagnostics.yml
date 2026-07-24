@@ -1,0 +1,34 @@
+name: native TypeScript diagnostics
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/native-*.ts"
+      - "src/lib/crypto/**"
+      - "src/routes/_authenticated/app.tsx"
+      - ".github/workflows/native-ts-diagnostics.yml"
+
+jobs:
+  diagnostics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: TypeScript diagnostic
+        shell: bash
+        run: |
+          set +e
+          bun x tsc --noEmit --pretty false > /tmp/tsc.log 2>&1
+          status=$?
+          tail -n 160 /tmp/tsc.log
+          exit $status
+      - name: Upload TypeScript diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-ts-diagnostics
+          path: /tmp/tsc.log
+          if-no-files-found: error
