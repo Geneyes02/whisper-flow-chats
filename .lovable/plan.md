@@ -1,44 +1,74 @@
-# Whispr Production Build — Staged Delivery
+# Whispr → Telegram-Parity Build Plan
 
-Your brief is 12 phases spanning auth, real-time messaging, groups, ephemeral rooms, encrypted media, and audited end-to-end encryption. Honestly delivered, that is multiple weeks of work and — per your own rule — the cryptography portion requires specialist review, not an AI one-shot. I will not fake any of it.
+Honest framing: Telegram is ~12 years of work by a large team. I can't ship all of it in one turn, but I can push hard and land the features that make Whispr *feel* on par. I'll execute the slices below back-to-back in this same session unless you redirect.
 
-Here is how I propose to ship it, in order, one slice per turn. Each slice ends in a working, tested state you can actually use before we move on.
+## What "Telegram-parity" means here
 
-## Slice 1 (this turn) — Audit + Real Auth + Sign-in UI
-- Audit current DB (tables already migrated from prior turn: profiles, devices, sessions, conversations, messages + envelopes, communities, etc.). Document gaps against your Phase 1 list (notably: `invites`, `blocks` exists, `user_settings` maps to `account_private`, `message_delivery_state` maps to `message_receipts`, `attachments` = `message_attachments`).
-- Add missing tables: `invites` (for 1:1 + group + Drop invitations), `drops` (ephemeral rooms w/ expiry).
-- Real auth: email/password + Google OAuth (via `configure_social_auth`), `/auth` route, username claim on first sign-in, `_authenticated/` gate.
-- Profile edit + active sessions view + session revoke.
+Core surfaces I'll build:
 
-## Slice 2 — Real 1:1 Messaging (server-side ciphertext, NOT E2EE yet)
-- `/app` shell: conversation list, message view, composer.
-- Real send/receive via `messages` table + Supabase Realtime.
-- Delivery + read state, typing indicator, pagination, optimistic send, reconnect.
-- **Honest labeling**: UI will say "Encrypted in transit and at rest" — NOT "end-to-end encrypted" — until Slice 4 lands. No security claims we can't back.
+1. **Rich Messaging** — reply-to, edit, delete-for-me/everyone, forward, reactions (emoji), pinned messages, typing indicators, read receipts, message search.
+2. **Media & Files** — image/video/file uploads via Cloud Storage, thumbnails, voice notes (record + waveform), inline previews, drag-drop.
+3. **Groups & Channels** — group chats (up to N members), broadcast channels, admin roles, invite links, join requests, member list, mute.
+4. **Presence & Status** — online/last-seen, typing, per-chat mute, unread badges, chat pinning, archive.
+5. **Discovery** — username search, contacts sync, "people you may know", QR-code invite/add.
+6. **Drops (ephemeral)** — self-destruct timers per chat, "view once" media, disappearing invite rooms.
+7. **Notifications & Sessions** — web push notifications, per-device session manager, remote logout, login alerts.
+8. **App Polish** — full-screen media viewer, chat theming, emoji picker, keyboard shortcuts, mobile-responsive layout, PWA offline shell for message cache.
 
-## Slice 3 — Groups + Invite Links + Drops
-- Create group, invite link (`/i/{token}`), join flow (open → sign in → join → message).
-- Drops with TTL + server-side expiry job (pg_cron on Supabase).
-- Block, leave, remove member, permissions.
+## What I will NOT do in this pass
 
-## Slice 4 — E2EE (requires your explicit go-ahead)
-- Integrate `libsignal-client` WASM for X3DH + Double Ratchet, OR MLS via `@matrix-org/matrix-sdk-crypto-wasm`.
-- Client-side keygen, IndexedDB key storage, per-device envelope fan-out (schema is already ready).
-- **I will stop and flag for specialist review** before shipping — per your Phase 3 rule. Key backup/recovery UX is a product decision I need you on.
+- **Client-side E2EE** (Signal/MLS). You already accepted "encrypted in transit + at rest" labeling until specialist review. Adding real E2EE on top of reactions/edits/media is a separate specialist project — I'll flag hooks so it slots in later without a rewrite.
+- **Native voice/video calls** (WebRTC SFU). Real calls need a media server (LiveKit/mediasoup) — I can add a LiveKit integration as a follow-up if you want; not in this pass.
+- **Bots API / Mini Apps / Payments / Stickers marketplace.** Out of scope for parity-feel; can be added later.
+- **Secret Chats** (device-bound). Depends on E2EE.
 
-## Slice 5 — Encrypted Media + Privacy Controls + Abuse Protection
-- Private Storage bucket, client-side file encryption, MIME/size validation.
-- Disappearing messages enforcement, read-receipt/typing/online toggles.
-- Rate limiting (edge middleware), auth throttling, invite abuse caps.
+If you want any of the "will not" items, say so and I'll re-plan.
 
-## Slice 6 — Prototype Purge + Production Test + Release Audit
-- Grep-and-remove any remaining prototype artifacts on the landing page.
-- Playwright end-to-end test with two real accounts covering your Phase 11 journey.
-- Final WORKING / PARTIAL / NOT IMPLEMENTED / SECURITY / BLOCKERS report.
+## Execution order (I'll ship in this order)
 
-## What I need from you before I start
-1. **Confirm this staging.** Otherwise tell me to reorder.
-2. **Auth methods**: email/password + Google OK, or add magic links / passkeys now?
-3. **E2EE library preference** for Slice 4: libsignal (Signal Protocol) or MLS? Or "you decide"?
+**Phase A — Messaging depth** (biggest UX gap)
+- DB: `message_reactions`, `message_reads`, `typing_events`, columns for `reply_to_id`, `edited_at`, `deleted_at`, `forwarded_from_id`, `pinned_at`.
+- Server fns: react, unreact, edit, delete, forward, mark-read, set-typing, pin/unpin, search.
+- UI: message hover actions, reply composer, reaction bar + picker, edited/deleted states, pinned banner, search bar.
+- Realtime: reactions, reads, typing, edits, deletes broadcast.
 
-Reply "go" and I ship Slice 1 immediately.
+**Phase B — Media & files**
+- Storage bucket `chat-media` with per-conversation RLS.
+- Upload pipeline (drag-drop, paste, click), image compression client-side, thumbnails.
+- Voice notes: MediaRecorder → wav, waveform render, inline player.
+- Full-screen viewer (images/video), file cards.
+
+**Phase C — Groups, channels, invites**
+- Extend existing `communities` model to real group chats + broadcast channels.
+- Invite links (`/join/:token`), join-request flow, admin/moderator/member roles enforced in RLS.
+- Member sheet, mute chat, leave, kick, promote.
+
+**Phase D — Presence, notifications, sessions**
+- `presence` table + Realtime presence channel for online/last-seen.
+- Per-chat mute + unread counters, pinned chats, archive.
+- Web Push (VAPID) opt-in + service worker for push.
+- Sessions list already exists; add device labels, current-session marker, "log out everywhere".
+
+**Phase E — Discovery + Drops + Polish**
+- QR add, username search improvements, contact suggestions.
+- Ephemeral chat timers (auto-delete on server after N seconds after read).
+- Emoji picker, keyboard shortcuts, mobile layout pass, chat theming, better skeletons.
+
+## Technical Details
+
+- **Stack:** existing TanStack Start + Supabase (Lovable Cloud) + Realtime. No new frameworks.
+- **Payloads still `bytea` opaque blobs** so future E2EE swap doesn't require another migration.
+- **RLS helpers** (`is_conversation_member`, role check) extended to cover reactions/reads/media/roles.
+- **Storage:** Supabase Storage bucket, signed URLs only, path = `conversation_id/message_id/filename`.
+- **Realtime channels:** one per conversation for messages/reactions/reads/typing; global presence channel for online.
+- **Push:** VAPID keys as secrets, `web-push` invoked from a server function on new message when recipient offline.
+- **Performance:** paginated message loading (cursor on created_at), virtualized list for long threads.
+
+## What I need from you
+
+Nothing to start — I'll execute Phase A now and continue straight through. Two optional decisions that would change scope:
+
+- **Want native calls (WebRTC via LiveKit)?** Say yes and I'll add a Phase F.
+- **Want E2EE re-scoped in now** with an "Experimental — unaudited" banner? Otherwise it stays deferred for specialist review.
+
+Approve and I'll start Phase A immediately.
