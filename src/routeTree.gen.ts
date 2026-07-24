@@ -17,6 +17,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as JoinCodeRouteImport } from './routes/join.$code'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedPrivacyDashboardRouteImport } from './routes/_authenticated/privacy-dashboard'
+import { Route as AuthenticatedDevicesRouteImport } from './routes/_authenticated/devices'
 import { Route as AuthenticatedAppRouteImport } from './routes/_authenticated/app'
 
 const SecurityRoute = SecurityRouteImport.update({
@@ -59,6 +60,11 @@ const AuthenticatedPrivacyDashboardRoute =
     path: '/privacy-dashboard',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedDevicesRoute = AuthenticatedDevicesRouteImport.update({
+  id: '/devices',
+  path: '/devices',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAppRoute = AuthenticatedAppRouteImport.update({
   id: '/app',
   path: '/app',
@@ -71,6 +77,7 @@ export interface FileRoutesByFullPath {
   '/download': typeof DownloadRoute
   '/security': typeof SecurityRoute
   '/app': typeof AuthenticatedAppRoute
+  '/devices': typeof AuthenticatedDevicesRoute
   '/privacy-dashboard': typeof AuthenticatedPrivacyDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/join/$code': typeof JoinCodeRoute
@@ -81,6 +88,7 @@ export interface FileRoutesByTo {
   '/download': typeof DownloadRoute
   '/security': typeof SecurityRoute
   '/app': typeof AuthenticatedAppRoute
+  '/devices': typeof AuthenticatedDevicesRoute
   '/privacy-dashboard': typeof AuthenticatedPrivacyDashboardRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/join/$code': typeof JoinCodeRoute
@@ -93,6 +101,7 @@ export interface FileRoutesById {
   '/download': typeof DownloadRoute
   '/security': typeof SecurityRoute
   '/_authenticated/app': typeof AuthenticatedAppRoute
+  '/_authenticated/devices': typeof AuthenticatedDevicesRoute
   '/_authenticated/privacy-dashboard': typeof AuthenticatedPrivacyDashboardRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/join/$code': typeof JoinCodeRoute
@@ -105,6 +114,7 @@ export interface FileRouteTypes {
     | '/download'
     | '/security'
     | '/app'
+    | '/devices'
     | '/privacy-dashboard'
     | '/settings'
     | '/join/$code'
@@ -115,6 +125,7 @@ export interface FileRouteTypes {
     | '/download'
     | '/security'
     | '/app'
+    | '/devices'
     | '/privacy-dashboard'
     | '/settings'
     | '/join/$code'
@@ -126,6 +137,7 @@ export interface FileRouteTypes {
     | '/download'
     | '/security'
     | '/_authenticated/app'
+    | '/_authenticated/devices'
     | '/_authenticated/privacy-dashboard'
     | '/_authenticated/settings'
     | '/join/$code'
@@ -198,6 +210,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPrivacyDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/devices': {
+      id: '/_authenticated/devices'
+      path: '/devices'
+      fullPath: '/devices'
+      preLoaderRoute: typeof AuthenticatedDevicesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/app': {
       id: '/_authenticated/app'
       path: '/app'
@@ -210,12 +229,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAppRoute: typeof AuthenticatedAppRoute
+  AuthenticatedDevicesRoute: typeof AuthenticatedDevicesRoute
   AuthenticatedPrivacyDashboardRoute: typeof AuthenticatedPrivacyDashboardRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAppRoute: AuthenticatedAppRoute,
+  AuthenticatedDevicesRoute: AuthenticatedDevicesRoute,
   AuthenticatedPrivacyDashboardRoute: AuthenticatedPrivacyDashboardRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
 }

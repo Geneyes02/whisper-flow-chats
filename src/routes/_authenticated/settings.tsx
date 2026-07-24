@@ -244,6 +244,20 @@ function SettingsPage() {
           </div>
         </section>
 
+        {/* Devices & keys */}
+        <section className="glass-strong mb-5 rounded-2xl p-6">
+          <h2 className="text-base font-semibold tracking-tight">Devices &amp; keys</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Manage per-device cryptographic identity and safety numbers. Private keys stay on device.
+          </p>
+          <Link
+            to="/devices"
+            className="mt-3 inline-flex rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs hover:bg-white/10"
+          >
+            Open Devices &amp; keys →
+          </Link>
+        </section>
+
         {/* Sessions */}
         <section className="glass-strong mb-5 rounded-2xl p-6">
           <h2 className="text-base font-semibold tracking-tight">Active sessions</h2>

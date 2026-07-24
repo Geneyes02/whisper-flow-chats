@@ -540,13 +540,19 @@ export type Database = {
       devices: {
         Row: {
           created_at: string
+          crypto_version: number
+          device_public_id: string | null
           fingerprint: string | null
           id: string
+          identity_key_signature: string | null
           key_algorithm: string | null
           key_version: number
           last_active_at: string | null
+          last_prekey_upload_at: string | null
+          local_key_wrap_algo: string | null
           name: string
           platform: Database["public"]["Enums"]["device_platform"]
+          public_ed25519_key: string | null
           public_identity_key: string | null
           public_signed_prekey: string | null
           registered_at: string
@@ -558,13 +564,19 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          crypto_version?: number
+          device_public_id?: string | null
           fingerprint?: string | null
           id?: string
+          identity_key_signature?: string | null
           key_algorithm?: string | null
           key_version?: number
           last_active_at?: string | null
+          last_prekey_upload_at?: string | null
+          local_key_wrap_algo?: string | null
           name: string
           platform: Database["public"]["Enums"]["device_platform"]
+          public_ed25519_key?: string | null
           public_identity_key?: string | null
           public_signed_prekey?: string | null
           registered_at?: string
@@ -576,13 +588,19 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          crypto_version?: number
+          device_public_id?: string | null
           fingerprint?: string | null
           id?: string
+          identity_key_signature?: string | null
           key_algorithm?: string | null
           key_version?: number
           last_active_at?: string | null
+          last_prekey_upload_at?: string | null
+          local_key_wrap_algo?: string | null
           name?: string
           platform?: Database["public"]["Enums"]["device_platform"]
+          public_ed25519_key?: string | null
           public_identity_key?: string | null
           public_signed_prekey?: string | null
           registered_at?: string
@@ -593,6 +611,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      identity_change_events: {
+        Row: {
+          created_at: string
+          device_id: string
+          id: string
+          new_public_identity_key: string
+          previous_public_identity_key: string | null
+          reason: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_id: string
+          id?: string
+          new_public_identity_key: string
+          previous_public_identity_key?: string | null
+          reason?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_id?: string
+          id?: string
+          new_public_identity_key?: string
+          previous_public_identity_key?: string | null
+          reason?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "identity_change_events_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       message_attachments: {
         Row: {
@@ -898,6 +954,47 @@ export type Database = {
           },
         ]
       }
+      one_time_prekeys: {
+        Row: {
+          algorithm: string
+          created_at: string
+          device_id: string
+          id: string
+          key_id: number
+          public_key: string
+          used_at: string | null
+          user_id: string
+        }
+        Insert: {
+          algorithm?: string
+          created_at?: string
+          device_id: string
+          id?: string
+          key_id: number
+          public_key: string
+          used_at?: string | null
+          user_id: string
+        }
+        Update: {
+          algorithm?: string
+          created_at?: string
+          device_id?: string
+          id?: string
+          key_id?: number
+          public_key?: string
+          used_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "one_time_prekeys_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1124,6 +1221,24 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_prekey_bundle: {
+        Args: { target_user: string }
+        Returns: {
+          crypto_version: number
+          device_id: string
+          identity_key_signature: string
+          key_algorithm: string
+          key_version: number
+          one_time_prekey: string
+          one_time_prekey_id: string
+          one_time_prekey_key_id: number
+          public_ed25519_key: string
+          public_identity_key: string
+          public_signed_prekey: string
+          signed_prekey_signature: string
+          user_id: string
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
