@@ -1,0 +1,50 @@
+[package]
+name = "whispr-crypto-host"
+version = "0.1.0"
+edition = "2021"
+description = "Whispr native crypto host — swappable backend behind a stable command surface"
+license = "MIT OR Apache-2.0"
+
+# ------------------------------------------------------------------------
+# Backend selection
+# ------------------------------------------------------------------------
+# The Whispr application ONLY talks to this crate via the `CryptoBackend`
+# trait + the `whispr_crypto_*` command shims in the Tauri app. The concrete
+# implementation is chosen at build time by cargo feature:
+#
+#   backend-stub       — deterministic fail-closed backend. Used by CI, unit
+#                        tests, and any build where a production crypto
+#                        provider is not licensed / not desired.
+#   backend-libsignal  — thin adapter over libsignal-protocol.
+#                        DO NOT enable until docs/ADR-LIBSIGNAL-LICENSING.md
+#                        is resolved. libsignal is AGPL-3.0.
+#
+# Exactly one backend must be selected. If none is selected, the crate
+# refuses to compile so we never accidentally ship an unencrypted build.
+# ------------------------------------------------------------------------
+
+[features]
+default = ["backend-stub"]
+backend-stub = []
+backend-libsignal = ["dep:libsignal-protocol"]
+
+[dependencies]
+serde         = { version = "1", features = ["derive"] }
+serde_json    = "1"
+thiserror     = "2"
+zeroize       = { version = "1", features = ["derive"] }
+rand_core     = { version = "0.6", features = ["getrandom"] }
+sha2          = "0.10"
+hex           = "0.4"
+parking_lot   = "0.12"
+
+# OS keychain (macOS Keychain / Windows Credential Manager / Linux
+# SecretService via libsecret). This is the ONLY place secret material
+# ever touches persistent storage.
+keyring       = "3"
+
+# Backend-libsignal — gated. Not resolved unless the feature is on.
+libsignal-protocol = { version = "0.60", optional = true }
+
+[dev-dependencies]
+tempfile = "3"

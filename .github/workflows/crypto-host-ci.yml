@@ -1,0 +1,64 @@
+name: crypto-host CI
+
+on:
+  push:
+    paths:
+      - "desktop/src-tauri/crypto-host/**"
+      - "desktop/src-tauri/Cargo.toml"
+      - ".github/workflows/crypto-host-ci.yml"
+  pull_request:
+    paths:
+      - "desktop/src-tauri/crypto-host/**"
+      - "desktop/src-tauri/Cargo.toml"
+      - ".github/workflows/crypto-host-ci.yml"
+
+jobs:
+  test:
+    name: crypto-host (stub backend)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop/src-tauri/crypto-host
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      # Linux SecretService backing for `keyring` in CI.
+      - name: Install libsecret (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libsecret-1-dev
+
+      - name: rustfmt
+        run: cargo fmt --all -- --check
+
+      - name: clippy (stub backend, deny warnings)
+        run: cargo clippy --no-default-features --features backend-stub --all-targets -- -D warnings
+
+      - name: test (stub backend)
+        run: cargo test --no-default-features --features backend-stub -- --nocapture
+
+      # Guardrail: prove the crate refuses to compile with no backend
+      # selected. If this step succeeds, the compile_error! in lib.rs is
+      # broken and CI must fail.
+      - name: guardrail — no backend must fail to build
+        shell: bash
+        run: |
+          if cargo check --no-default-features 2> /tmp/nb.log; then
+            echo "::error::crypto-host built with no backend selected"
+            cat /tmp/nb.log
+            exit 1
+          fi
+          echo "OK: crypto-host refused to build with no backend"
