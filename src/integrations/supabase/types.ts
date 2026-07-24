@@ -954,6 +954,77 @@ export type Database = {
           },
         ]
       }
+      mls_key_package_consumption_log: {
+        Row: {
+          ciphersuite_tag: string
+          consumed_at: string
+          consumer_user_id: string
+          key_package_hash: string
+          owner_device_id: string
+          owner_user_id: string
+        }
+        Insert: {
+          ciphersuite_tag: string
+          consumed_at?: string
+          consumer_user_id: string
+          key_package_hash: string
+          owner_device_id: string
+          owner_user_id: string
+        }
+        Update: {
+          ciphersuite_tag?: string
+          consumed_at?: string
+          consumer_user_id?: string
+          key_package_hash?: string
+          owner_device_id?: string
+          owner_user_id?: string
+        }
+        Relationships: []
+      }
+      mls_key_packages: {
+        Row: {
+          ciphersuite_tag: string
+          created_at: string
+          credential_identity: string
+          device_id: string
+          expires_at: string
+          id: string
+          key_package_hash: string
+          key_package_tls: string
+          user_id: string
+        }
+        Insert: {
+          ciphersuite_tag: string
+          created_at?: string
+          credential_identity: string
+          device_id: string
+          expires_at: string
+          id?: string
+          key_package_hash: string
+          key_package_tls: string
+          user_id: string
+        }
+        Update: {
+          ciphersuite_tag?: string
+          created_at?: string
+          credential_identity?: string
+          device_id?: string
+          expires_at?: string
+          id?: string
+          key_package_hash?: string
+          key_package_tls?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mls_key_packages_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       one_time_prekeys: {
         Row: {
           algorithm: string
@@ -1221,6 +1292,17 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      consume_mls_key_package: {
+        Args: { target_device?: string; target_user: string }
+        Returns: {
+          ciphersuite_tag: string
+          device_id: string
+          key_package_b64: string
+          key_package_hash: string
+          remaining: number
+          user_id: string
+        }[]
+      }
       get_prekey_bundle: {
         Args: { target_user: string }
         Returns: {
@@ -1255,6 +1337,21 @@ export type Database = {
         Returns: boolean
       }
       is_staff: { Args: { _user_id: string }; Returns: boolean }
+      mls_key_package_directory_status: {
+        Args: { target_device: string }
+        Returns: {
+          newest_created_at: string
+          oldest_expires_at: string
+          remaining: number
+        }[]
+      }
+      publish_mls_key_packages: {
+        Args: { bundles: Json }
+        Returns: {
+          key_package_hash: string
+          status: string
+        }[]
+      }
     }
     Enums: {
       account_status: "active" | "suspended" | "deactivated" | "deleted"
