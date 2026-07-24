@@ -82,6 +82,25 @@ jobs:
           PY
       - name: Verify promoted TypeScript
         run: bun x prettier --write src/lib/crypto/libsignal-bridge.ts && bun x tsc --noEmit
+      - name: Ensure CI-only Tauri icon exists
+        shell: bash
+        run: |
+          if [ ! -f desktop/src-tauri/icons/icon.png ]; then
+            python - <<'PY'
+            from pathlib import Path
+            import base64
+
+            # 1x1 opaque PNG. Tauri's compile-time context macro requires an icon
+            # file even for `cargo check`; this file is generated only in CI and is
+            # never committed or shipped.
+            png = base64.b64decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII='
+            )
+            path = Path('desktop/src-tauri/icons/icon.png')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(png)
+            PY
+          fi
       - name: Verify promoted desktop dependency resolves
         working-directory: desktop/src-tauri
         shell: bash
