@@ -140,8 +140,14 @@ const NativeEnvelope = z.object({
   conversation_id: z.string().uuid(),
   message_id: z.string().uuid(),
   counter: z.number().int().nonnegative(),
-  ciphertext: z.string().min(1).max(24 * 1024 * 1024),
-  aad: z.string().min(1).max(128 * 1024),
+  ciphertext: z
+    .string()
+    .min(1)
+    .max(24 * 1024 * 1024),
+  aad: z
+    .string()
+    .min(1)
+    .max(128 * 1024),
   kind: z.enum(["prekey", "whisper"]),
 });
 export type NativeEnvelopeWire = z.infer<typeof NativeEnvelope>;
@@ -166,15 +172,12 @@ export const sendEncryptedMlsMessage = createServerFn({ method: "POST" })
       .parse(data),
   )
   .handler(async ({ data, context }) => {
-    const { data: messageId, error } = await rpcClient(context.supabase).rpc(
-      "send_mls_message",
-      {
-        p_message_id: data.messageId,
-        p_conversation_id: data.conversationId,
-        p_sender_device_id: data.senderDeviceId,
-        p_envelopes: data.envelopes,
-      },
-    );
+    const { data: messageId, error } = await rpcClient(context.supabase).rpc("send_mls_message", {
+      p_message_id: data.messageId,
+      p_conversation_id: data.conversationId,
+      p_sender_device_id: data.senderDeviceId,
+      p_envelopes: data.envelopes,
+    });
     if (error) throw new Error(error.message);
     return { messageId: String(messageId ?? data.messageId) };
   });
