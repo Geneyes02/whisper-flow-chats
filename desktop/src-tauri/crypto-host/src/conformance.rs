@@ -67,10 +67,18 @@ impl ConformanceReport {
     }
 }
 
-fn check(id: &'static str, description: &'static str, ok: bool, detail: Option<String>)
-    -> ConformanceCheck
-{
-    ConformanceCheck { id, description, passed: ok, detail }
+fn check(
+    id: &'static str,
+    description: &'static str,
+    ok: bool,
+    detail: Option<String>,
+) -> ConformanceCheck {
+    ConformanceCheck {
+        id,
+        description,
+        passed: ok,
+        detail,
+    }
 }
 
 /// Build a fresh host bound to a fresh in-memory store.
@@ -136,7 +144,10 @@ pub fn run_host_invariants(capability: Capability) -> ConformanceReport {
     checks.push(check(
         "validation.recipient_id_charset",
         "encrypt rejects invalid recipient_device_id",
-        matches!(err.code, CryptoErrorCode::Internal | CryptoErrorCode::Unsupported),
+        matches!(
+            err.code,
+            CryptoErrorCode::Internal | CryptoErrorCode::Unsupported
+        ),
         Some(format!("{:?}", err.code)),
     ));
 
@@ -148,7 +159,10 @@ pub fn run_host_invariants(capability: Capability) -> ConformanceReport {
     checks.push(check(
         "validation.recipient_id_length",
         "encrypt rejects oversized recipient_device_id",
-        matches!(err.code, CryptoErrorCode::Internal | CryptoErrorCode::Unsupported),
+        matches!(
+            err.code,
+            CryptoErrorCode::Internal | CryptoErrorCode::Unsupported
+        ),
         None,
     ));
 
@@ -203,14 +217,20 @@ pub fn run_host_invariants(capability: Capability) -> ConformanceReport {
     h1.create_identity().unwrap();
     drop(h1);
     // Corrupt the identity slot.
-    store.put(crate::keychain::Slot::DeviceIdentity, "not-json").unwrap();
+    store
+        .put(crate::keychain::Slot::DeviceIdentity, "not-json")
+        .unwrap();
     let corrupt = CryptoHost::with_store(store);
     checks.push(check(
         "storage.corruption_detected",
         "corrupted identity slot yields StorageCorrupt at load",
         corrupt.is_err()
             || matches!(
-                corrupt.as_ref().ok().and_then(|h| h.load_identity().err()).map(|e| e.code),
+                corrupt
+                    .as_ref()
+                    .ok()
+                    .and_then(|h| h.load_identity().err())
+                    .map(|e| e.code),
                 Some(CryptoErrorCode::StorageCorrupt)
             ),
         None,
@@ -240,7 +260,11 @@ pub fn run_host_invariants(capability: Capability) -> ConformanceReport {
     }
 
     let backend = { fresh_host().0.backend_info().name };
-    ConformanceReport { backend, capability, checks }
+    ConformanceReport {
+        backend,
+        capability,
+        checks,
+    }
 }
 
 /// Run the messaging tier. Only meaningful for backends that claim

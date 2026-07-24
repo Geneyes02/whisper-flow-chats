@@ -118,7 +118,9 @@ pub fn build_default_backend(
 ) -> Result<Box<dyn CryptoBackend>> {
     #[cfg(feature = "backend-openmls")]
     {
-        return Ok(Box::new(openmls_runtime::OpenMlsRuntimeBackend::new(store)?));
+        return Ok(Box::new(openmls_runtime::OpenMlsRuntimeBackend::new(
+            store,
+        )?));
     }
 
     #[cfg(all(feature = "backend-libsignal", not(feature = "backend-openmls")))]
@@ -138,5 +140,7 @@ pub fn build_default_backend(
     // Unreachable — lib.rs compile_error guards this, but keep an explicit
     // fail-closed path.
     #[allow(unreachable_code)]
-    Err(crate::error::CryptoError::unsupported("no backend selected"))
+    Err(crate::error::CryptoError::unsupported(
+        "no backend selected",
+    ))
 }

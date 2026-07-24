@@ -56,9 +56,9 @@ impl Slot {
     fn account(self) -> &'static str {
         match self {
             Slot::DeviceIdentity => "device-identity",
-            Slot::SessionDbKey   => "session-db-key",
-            Slot::PrekeyStore    => "prekey-store",
-            Slot::SessionStore   => "session-store",
+            Slot::SessionDbKey => "session-db-key",
+            Slot::PrekeyStore => "prekey-store",
+            Slot::SessionStore => "session-store",
         }
     }
 }
@@ -88,19 +88,24 @@ pub struct OsKeychain;
 
 impl OsKeychain {
     /// Construct a new OS-backed keychain handle.
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 
     fn entry(slot: Slot) -> Result<keyring::Entry> {
-        keyring::Entry::new(KEYCHAIN_SERVICE, slot.account())
-            .map_err(|_| CryptoError::new(
+        keyring::Entry::new(KEYCHAIN_SERVICE, slot.account()).map_err(|_| {
+            CryptoError::new(
                 CryptoErrorCode::StorageCorrupt,
                 "keychain entry construction failed",
-            ))
+            )
+        })
     }
 }
 
 impl Default for OsKeychain {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SecureStore for OsKeychain {
@@ -121,10 +126,9 @@ impl SecureStore for OsKeychain {
 
     fn put(&self, slot: Slot, value: &str) -> Result<()> {
         Self::entry(slot)?.set_password(value).map_err(|e| match e {
-            keyring::Error::PlatformFailure(_) => CryptoError::new(
-                CryptoErrorCode::StorageLocked,
-                "keychain platform failure",
-            ),
+            keyring::Error::PlatformFailure(_) => {
+                CryptoError::new(CryptoErrorCode::StorageLocked, "keychain platform failure")
+            }
             _ => CryptoError::new(CryptoErrorCode::StorageCorrupt, "keychain write failed"),
         })
     }
@@ -155,7 +159,9 @@ pub struct MemoryStore {
 impl MemoryStore {
     /// Empty store.
     pub fn new() -> Self {
-        Self { inner: parking_lot::Mutex::new(std::collections::HashMap::new()) }
+        Self {
+            inner: parking_lot::Mutex::new(std::collections::HashMap::new()),
+        }
     }
 
     /// Force-inject a value for a slot. Test-only helper for the
@@ -166,7 +172,9 @@ impl MemoryStore {
 }
 
 impl Default for MemoryStore {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SecureStore for MemoryStore {

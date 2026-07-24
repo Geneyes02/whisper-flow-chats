@@ -173,9 +173,10 @@ pub fn validate_id(field: &str, value: &str) -> Result<()> {
             format!("{field}: too long"),
         ));
     }
-    if !value.chars().all(|c| {
-        c.is_ascii_graphic() || c == '-' || c == '_' || c == ':'
-    }) {
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_graphic() || c == '-' || c == '_' || c == ':')
+    {
         return Err(CryptoError::new(
             CryptoErrorCode::Internal,
             format!("{field}: invalid characters"),

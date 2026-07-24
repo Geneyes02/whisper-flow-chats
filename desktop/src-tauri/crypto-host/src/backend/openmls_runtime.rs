@@ -16,10 +16,9 @@ use std::{collections::HashMap, sync::Arc};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use openmls::prelude::{
-    Ciphersuite, Credential, CredentialType, CredentialWithKey, GroupId, KeyPackage,
-    KeyPackageIn, LeafNodeParameters, Lifetime, MlsGroup, MlsGroupCreateConfig,
-    MlsGroupJoinConfig, MlsMessageIn, ProcessedMessageContent, ProtocolVersion,
-    StagedWelcome,
+    Ciphersuite, Credential, CredentialType, CredentialWithKey, GroupId, KeyPackage, KeyPackageIn,
+    LeafNodeParameters, Lifetime, MlsGroup, MlsGroupCreateConfig, MlsGroupJoinConfig, MlsMessageIn,
+    ProcessedMessageContent, ProtocolVersion, StagedWelcome,
 };
 use openmls_basic_credential::SignatureKeyPair;
 use openmls_rust_crypto::OpenMlsRustCrypto;
@@ -42,8 +41,7 @@ pub const OPENMLS_RUNTIME_BACKEND: &str = "openmls-runtime-v1";
 pub const WHISPR_MLS_PROFILE: &str = "whispr-mls-v1";
 pub const WHISPR_CIPHERSUITE: Ciphersuite =
     Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
-pub const WHISPR_CIPHERSUITE_TAG: &str =
-    "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519";
+pub const WHISPR_CIPHERSUITE_TAG: &str = "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519";
 const KEYPACKAGE_LIFETIME_SECS: u64 = 60 * 60 * 24 * 90;
 const MAX_PREKEYS: u32 = 200;
 const MAX_SEEN_MESSAGE_IDS: usize = 20_000;
@@ -96,10 +94,12 @@ pub struct OpenMlsRuntimeBackend {
 
 impl OpenMlsRuntimeBackend {
     pub fn new(store: Arc<dyn SecureStore>) -> Result<Self> {
-        let identity = match Snapshot::load(&*store, Slot::DeviceIdentity, OPENMLS_RUNTIME_BACKEND)? {
+        let identity = match Snapshot::load(&*store, Slot::DeviceIdentity, OPENMLS_RUNTIME_BACKEND)?
+        {
             Some(s) => {
-                let id: PersistedIdentity = serde_json::from_str(&s.payload)
-                    .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "identity payload"))?;
+                let id: PersistedIdentity = serde_json::from_str(&s.payload).map_err(|_| {
+                    CryptoError::new(CryptoErrorCode::StorageCorrupt, "identity payload")
+                })?;
                 if id.ciphersuite_tag != WHISPR_CIPHERSUITE_TAG {
                     return Err(CryptoError::new(
                         CryptoErrorCode::StorageCorrupt,
@@ -125,7 +125,12 @@ impl OpenMlsRuntimeBackend {
     fn persist_identity(&self, id: &PersistedIdentity) -> Result<()> {
         let payload = serde_json::to_string(id)
             .map_err(|_| CryptoError::internal("openmls identity serialize"))?;
-        Snapshot::save(&*self.store, Slot::DeviceIdentity, OPENMLS_RUNTIME_BACKEND, payload)
+        Snapshot::save(
+            &*self.store,
+            Slot::DeviceIdentity,
+            OPENMLS_RUNTIME_BACKEND,
+            payload,
+        )
     }
 
     fn require_identity(&self) -> Result<PersistedIdentity> {
@@ -134,7 +139,10 @@ impl OpenMlsRuntimeBackend {
             .as_ref()
             .ok_or_else(|| CryptoError::new(CryptoErrorCode::NoIdentity, "no local identity"))?;
         if id.revoked {
-            return Err(CryptoError::new(CryptoErrorCode::DeviceRevoked, "device revoked"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::DeviceRevoked,
+                "device revoked",
+            ));
         }
         Ok(id.clone())
     }
@@ -144,7 +152,11 @@ impl OpenMlsRuntimeBackend {
             .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "signature public"))?;
         let private = decode_b64(&id.signature_private_b64)
             .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "signature private"))?;
-        Ok(SignatureKeyPair::from_raw(SignatureScheme::ED25519, private, public))
+        Ok(SignatureKeyPair::from_raw(
+            SignatureScheme::ED25519,
+            private,
+            public,
+        ))
     }
 
     fn credential(id: &PersistedIdentity) -> Result<Credential> {
@@ -163,7 +175,9 @@ impl OpenMlsRuntimeBackend {
     }
 
     fn restore_signer_into_provider(&self) -> Result<()> {
-        let Some(id) = self.identity.lock().clone() else { return Ok(()) };
+        let Some(id) = self.identity.lock().clone() else {
+            return Ok(());
+        };
         if id.revoked {
             return Ok(());
         }
@@ -214,7 +228,12 @@ impl OpenMlsRuntimeBackend {
         drop(values);
         let payload = serde_json::to_string(&meta)
             .map_err(|_| CryptoError::internal("runtime snapshot serialize"))?;
-        Snapshot::save(&*self.store, Slot::SessionStore, OPENMLS_RUNTIME_BACKEND, payload)
+        Snapshot::save(
+            &*self.store,
+            Slot::SessionStore,
+            OPENMLS_RUNTIME_BACKEND,
+            payload,
+        )
     }
 
     fn persist_runtime(&self) -> Result<()> {
@@ -223,7 +242,11 @@ impl OpenMlsRuntimeBackend {
     }
 
     fn group_id(local: &str, peer: &str) -> GroupId {
-        let (a, b) = if local <= peer { (local, peer) } else { (peer, local) };
+        let (a, b) = if local <= peer {
+            (local, peer)
+        } else {
+            (peer, local)
+        };
         let mut h = Sha256::new();
         h.update(b"whispr-direct-mls-v1\0");
         h.update(a.as_bytes());
@@ -241,24 +264,37 @@ impl OpenMlsRuntimeBackend {
     }
 
     fn validate_peer_keypackage(&self, wire: &[u8], peer: &PrekeyBundle) -> Result<KeyPackage> {
-        let kp_in = KeyPackageIn::tls_deserialize(&mut &wire[..])
-            .map_err(|_| CryptoError::new(CryptoErrorCode::InvalidBundle, "malformed keypackage"))?;
+        let kp_in = KeyPackageIn::tls_deserialize(&mut &wire[..]).map_err(|_| {
+            CryptoError::new(CryptoErrorCode::InvalidBundle, "malformed keypackage")
+        })?;
         let kp = kp_in
             .validate(self.provider.crypto(), ProtocolVersion::Mls10)
-            .map_err(|_| CryptoError::new(CryptoErrorCode::InvalidBundle, "keypackage validation"))?;
+            .map_err(|_| {
+                CryptoError::new(CryptoErrorCode::InvalidBundle, "keypackage validation")
+            })?;
         if kp.ciphersuite() != WHISPR_CIPHERSUITE {
-            return Err(CryptoError::new(CryptoErrorCode::InvalidBundle, "wrong ciphersuite"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::InvalidBundle,
+                "wrong ciphersuite",
+            ));
         }
         let cred = kp.leaf_node().credential();
         if cred.credential_type() != CredentialType::Basic
             || cred.serialized_content() != peer.device_id.as_bytes()
         {
-            return Err(CryptoError::new(CryptoErrorCode::IdentityMismatch, "device binding"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::IdentityMismatch,
+                "device binding",
+            ));
         }
-        let expected_sig = decode_b64(&peer.identity_public_key)
-            .map_err(|_| CryptoError::new(CryptoErrorCode::InvalidBundle, "identity key encoding"))?;
+        let expected_sig = decode_b64(&peer.identity_public_key).map_err(|_| {
+            CryptoError::new(CryptoErrorCode::InvalidBundle, "identity key encoding")
+        })?;
         if kp.leaf_node().signature_key().as_slice() != expected_sig.as_slice() {
-            return Err(CryptoError::new(CryptoErrorCode::IdentityMismatch, "signature key mismatch"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::IdentityMismatch,
+                "signature key mismatch",
+            ));
         }
         Ok(kp)
     }
@@ -268,19 +304,25 @@ impl OpenMlsRuntimeBackend {
     }
 
     fn process_control_message(&self, group: &mut MlsGroup, bytes: &[u8]) -> Result<()> {
-        let msg = MlsMessageIn::tls_deserialize_exact(bytes.to_vec())
-            .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "control message parse"))?;
-        let protocol = msg
-            .try_into_protocol_message()
-            .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "control message type"))?;
+        let msg = MlsMessageIn::tls_deserialize_exact(bytes.to_vec()).map_err(|_| {
+            CryptoError::new(CryptoErrorCode::BadCiphertext, "control message parse")
+        })?;
+        let protocol = msg.try_into_protocol_message().map_err(|_| {
+            CryptoError::new(CryptoErrorCode::BadCiphertext, "control message type")
+        })?;
         let processed = group
             .process_message(&self.provider, protocol)
-            .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "control message validation"))?;
+            .map_err(|_| {
+                CryptoError::new(CryptoErrorCode::BadCiphertext, "control message validation")
+            })?;
         match processed.into_content() {
             ProcessedMessageContent::StagedCommitMessage(staged) => group
                 .merge_staged_commit(&self.provider, *staged)
                 .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "commit merge")),
-            _ => Err(CryptoError::new(CryptoErrorCode::BadCiphertext, "unexpected control message")),
+            _ => Err(CryptoError::new(
+                CryptoErrorCode::BadCiphertext,
+                "unexpected control message",
+            )),
         }
     }
 
@@ -295,13 +337,18 @@ impl OpenMlsRuntimeBackend {
             .use_ratchet_tree_extension(true)
             .build();
         let staged = StagedWelcome::new_from_welcome(&self.provider, &join_config, welcome, None)
-            .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "welcome validation"))?;
+            .map_err(|_| {
+            CryptoError::new(CryptoErrorCode::BadCiphertext, "welcome validation")
+        })?;
         let group = staged
             .into_group(&self.provider)
             .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "welcome join"))?;
         let expected = Self::group_id(&id.device_id, sender_device_id);
         if group.group_id() != &expected {
-            return Err(CryptoError::new(CryptoErrorCode::IdentityMismatch, "welcome group binding"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::IdentityMismatch,
+                "welcome group binding",
+            ));
         }
         Ok(())
     }
@@ -389,7 +436,10 @@ impl CryptoBackend for OpenMlsRuntimeBackend {
     fn publish_prekeys(&self, count: u32) -> Result<PrekeyBundle> {
         let _lock = self.mutation_lock.lock();
         if count == 0 || count > MAX_PREKEYS {
-            return Err(CryptoError::new(CryptoErrorCode::InvalidBundle, "prekey count"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::InvalidBundle,
+                "prekey count",
+            ));
         }
         let id = self.require_identity()?;
         let signer = Self::signer(&id)?;
@@ -557,17 +607,29 @@ impl CryptoBackend for OpenMlsRuntimeBackend {
             || envelope.protocol_id != WHISPR_MLS_PROFILE
             || envelope.protocol_version != 1
         {
-            return Err(CryptoError::new(CryptoErrorCode::BadCiphertext, "protocol mismatch"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::BadCiphertext,
+                "protocol mismatch",
+            ));
         }
         if envelope.recipient_device_id != id.device_id {
-            return Err(CryptoError::new(CryptoErrorCode::IdentityMismatch, "wrong recipient"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::IdentityMismatch,
+                "wrong recipient",
+            ));
         }
 
         let mut meta = self.load_runtime_snapshot()?;
         if !envelope.message_id.is_empty()
-            && meta.seen_message_ids.iter().any(|v| v == &envelope.message_id)
+            && meta
+                .seen_message_ids
+                .iter()
+                .any(|v| v == &envelope.message_id)
         {
-            return Err(CryptoError::new(CryptoErrorCode::BadCiphertext, "message replay"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::BadCiphertext,
+                "message replay",
+            ));
         }
 
         let frame_bytes = decode_b64(&envelope.ciphertext)
@@ -583,8 +645,9 @@ impl CryptoBackend for OpenMlsRuntimeBackend {
             .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "group lookup"))?
             .is_none()
             {
-                let bytes = decode_b64(welcome_b64)
-                    .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "welcome encoding"))?;
+                let bytes = decode_b64(welcome_b64).map_err(|_| {
+                    CryptoError::new(CryptoErrorCode::BadCiphertext, "welcome encoding")
+                })?;
                 self.accept_welcome(&envelope.sender_device_id, &bytes)?;
             }
         }
@@ -596,8 +659,9 @@ impl CryptoBackend for OpenMlsRuntimeBackend {
             self.process_control_message(&mut group, &bytes)?;
         }
 
-        let app_bytes = decode_b64(&frame.application_b64)
-            .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "application encoding"))?;
+        let app_bytes = decode_b64(&frame.application_b64).map_err(|_| {
+            CryptoError::new(CryptoErrorCode::BadCiphertext, "application encoding")
+        })?;
         let msg = MlsMessageIn::tls_deserialize_exact(app_bytes)
             .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "application parse"))?;
         let protocol = msg
@@ -605,15 +669,25 @@ impl CryptoBackend for OpenMlsRuntimeBackend {
             .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "application type"))?;
         let processed = group
             .process_message(&self.provider, protocol)
-            .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "application validation"))?;
+            .map_err(|_| {
+                CryptoError::new(CryptoErrorCode::BadCiphertext, "application validation")
+            })?;
         let aad = decode_b64(&envelope.aad)
             .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "aad encoding"))?;
         if processed.aad() != aad.as_slice() {
-            return Err(CryptoError::new(CryptoErrorCode::BadCiphertext, "aad mismatch"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::BadCiphertext,
+                "aad mismatch",
+            ));
         }
         let plaintext = match processed.into_content() {
             ProcessedMessageContent::ApplicationMessage(m) => m.into_bytes(),
-            _ => return Err(CryptoError::new(CryptoErrorCode::BadCiphertext, "unexpected message type")),
+            _ => {
+                return Err(CryptoError::new(
+                    CryptoErrorCode::BadCiphertext,
+                    "unexpected message type",
+                ))
+            }
         };
 
         if !envelope.message_id.is_empty() {
@@ -715,17 +789,23 @@ mod tests {
         let (_as, _bs, alice, bob, aid, bid) = pair();
         let bob_kp = bob.publish_prekeys(4).unwrap();
         alice.establish_session(bob_kp).unwrap();
-        let env = alice.encrypt(&bid.device_id, b"hello bob", &aad(1)).unwrap();
+        let env = alice
+            .encrypt(&bid.device_id, b"hello bob", &aad(1))
+            .unwrap();
         assert_eq!(env.kind, EnvelopeKind::Prekey);
         assert_eq!(bob.decrypt(&env).unwrap(), b"hello bob");
-        let reply = bob.encrypt(&aid.device_id, b"hello alice", &aad(2)).unwrap();
+        let reply = bob
+            .encrypt(&aid.device_id, b"hello alice", &aad(2))
+            .unwrap();
         assert_eq!(alice.decrypt(&reply).unwrap(), b"hello alice");
     }
 
     #[test]
     fn rt_restart_restores_group_and_ratchet_state() {
         let (as_, bs, alice, bob, aid, bid) = pair();
-        alice.establish_session(bob.publish_prekeys(2).unwrap()).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(2).unwrap())
+            .unwrap();
         let first = alice.encrypt(&bid.device_id, b"one", &aad(1)).unwrap();
         assert_eq!(bob.decrypt(&first).unwrap(), b"one");
         drop(alice);
@@ -739,39 +819,57 @@ mod tests {
     #[test]
     fn rt_replay_and_tamper_fail_closed() {
         let (_as, _bs, alice, bob, _aid, bid) = pair();
-        alice.establish_session(bob.publish_prekeys(2).unwrap()).unwrap();
-        let env = alice.encrypt(&bid.device_id, b"secret sentinel", &aad(10)).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(2).unwrap())
+            .unwrap();
+        let env = alice
+            .encrypt(&bid.device_id, b"secret sentinel", &aad(10))
+            .unwrap();
         assert_eq!(bob.decrypt(&env).unwrap(), b"secret sentinel");
-        assert_eq!(bob.decrypt(&env).unwrap_err().code, CryptoErrorCode::BadCiphertext);
+        assert_eq!(
+            bob.decrypt(&env).unwrap_err().code,
+            CryptoErrorCode::BadCiphertext
+        );
 
         let mut tampered = alice.encrypt(&bid.device_id, b"second", &aad(11)).unwrap();
         let mut raw = decode_b64(&tampered.ciphertext).unwrap();
         let idx = raw.len() / 2;
         raw[idx] ^= 1;
         tampered.ciphertext = encode_b64(&raw);
-        assert_eq!(bob.decrypt(&tampered).unwrap_err().code, CryptoErrorCode::BadCiphertext);
+        assert_eq!(
+            bob.decrypt(&tampered).unwrap_err().code,
+            CryptoErrorCode::BadCiphertext
+        );
     }
 
     #[test]
     fn rt_rotation_commit_is_delivered_before_next_application_message() {
         let (_as, _bs, alice, bob, aid, bid) = pair();
-        alice.establish_session(bob.publish_prekeys(2).unwrap()).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(2).unwrap())
+            .unwrap();
         let first = alice.encrypt(&bid.device_id, b"before", &aad(1)).unwrap();
         bob.decrypt(&first).unwrap();
         alice.rotate_session(&bid.device_id).unwrap();
         let after = alice.encrypt(&bid.device_id, b"after", &aad(2)).unwrap();
         assert_eq!(bob.decrypt(&after).unwrap(), b"after");
-        let reply = bob.encrypt(&aid.device_id, b"still synced", &aad(3)).unwrap();
+        let reply = bob
+            .encrypt(&aid.device_id, b"still synced", &aad(3))
+            .unwrap();
         assert_eq!(alice.decrypt(&reply).unwrap(), b"still synced");
     }
 
     #[test]
     fn rt_1000_sequential_messages() {
         let (_as, _bs, alice, bob, _aid, bid) = pair();
-        alice.establish_session(bob.publish_prekeys(2).unwrap()).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(2).unwrap())
+            .unwrap();
         for i in 0..1000usize {
             let p = format!("message-{i}");
-            let env = alice.encrypt(&bid.device_id, p.as_bytes(), &aad(i)).unwrap();
+            let env = alice
+                .encrypt(&bid.device_id, p.as_bytes(), &aad(i))
+                .unwrap();
             assert_eq!(bob.decrypt(&env).unwrap(), p.as_bytes());
         }
     }
@@ -779,7 +877,9 @@ mod tests {
     #[test]
     fn rt_server_visible_envelope_does_not_contain_plaintext() {
         let (_as, _bs, alice, bob, _aid, bid) = pair();
-        alice.establish_session(bob.publish_prekeys(2).unwrap()).unwrap();
+        alice
+            .establish_session(bob.publish_prekeys(2).unwrap())
+            .unwrap();
         let sentinel = b"WHISPR-SERVER-BLINDNESS-SENTINEL-7b6ac1";
         let env = alice.encrypt(&bid.device_id, sentinel, &aad(77)).unwrap();
         let json = serde_json::to_vec(&env).unwrap();

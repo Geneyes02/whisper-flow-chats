@@ -46,8 +46,8 @@ use crate::backend::{build_default_backend, CryptoBackend};
 use crate::error::{CryptoError, CryptoErrorCode, Result};
 use crate::keychain::{wipe_all, OsKeychain, SecureStore, Slot};
 use crate::types::{
-    validate_envelope, validate_id, DeviceIdentity, EncryptedEnvelope, PrekeyBundle,
-    SafetyNumber, ENVELOPE_VERSION, MAX_AAD_LEN, MAX_PLAINTEXT_LEN,
+    validate_envelope, validate_id, DeviceIdentity, EncryptedEnvelope, PrekeyBundle, SafetyNumber,
+    ENVELOPE_VERSION, MAX_AAD_LEN, MAX_PLAINTEXT_LEN,
 };
 
 /// Reported to the UI so it can render a coherent status pill without
@@ -133,7 +133,9 @@ impl CryptoHost {
     // ---- lifecycle -----------------------------------------------------
 
     /// Backend identifier (for diagnostics, envelope tagging, snapshot audit).
-    pub fn backend_name(&self) -> &'static str { self.backend.lock().name() }
+    pub fn backend_name(&self) -> &'static str {
+        self.backend.lock().name()
+    }
 
     /// Static backend info.
     pub fn backend_info(&self) -> BackendInfo {
@@ -189,10 +191,14 @@ impl CryptoHost {
     }
 
     /// Move to locked state. Subsequent operations return `StorageLocked`.
-    pub fn lock(&self) { *self.lock.lock() = LockState::Locked; }
+    pub fn lock(&self) {
+        *self.lock.lock() = LockState::Locked;
+    }
 
     /// Return to unlocked state.
-    pub fn unlock(&self) { *self.lock.lock() = LockState::Unlocked; }
+    pub fn unlock(&self) {
+        *self.lock.lock() = LockState::Unlocked;
+    }
 
     /// Sign the user out: wipe every secret slot AND drop in-memory state
     /// by rebuilding the backend from an empty store. Idempotent.
@@ -208,7 +214,9 @@ impl CryptoHost {
     /// distinct entry point so future backends can layer additional
     /// scrubbing (e.g. shred an encrypted session DB) without changing the
     /// UI surface.
-    pub fn wipe(&self) -> Result<()> { self.logout() }
+    pub fn wipe(&self) -> Result<()> {
+        self.logout()
+    }
 
     // ---- gating --------------------------------------------------------
 
@@ -278,12 +286,11 @@ impl CryptoHost {
             ));
         }
         if aad.len() > MAX_AAD_LEN {
-            return Err(CryptoError::new(
-                CryptoErrorCode::Internal,
-                "aad too large",
-            ));
+            return Err(CryptoError::new(CryptoErrorCode::Internal, "aad too large"));
         }
-        self.backend.lock().encrypt(recipient_device_id, plaintext, aad)
+        self.backend
+            .lock()
+            .encrypt(recipient_device_id, plaintext, aad)
     }
 
     /// Decrypt an envelope.
@@ -323,7 +330,9 @@ impl CryptoHost {
     /// downstream via `#[doc(hidden)]`. Used by adversarial harness to
     /// simulate corruption of persisted state.
     #[doc(hidden)]
-    pub fn __store_for_tests(&self) -> Arc<dyn SecureStore> { self.store.clone() }
+    pub fn __store_for_tests(&self) -> Arc<dyn SecureStore> {
+        self.store.clone()
+    }
 
     /// Force a specific slot's raw value — test-only.
     #[doc(hidden)]

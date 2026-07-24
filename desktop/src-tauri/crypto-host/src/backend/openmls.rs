@@ -52,9 +52,7 @@ use crate::backend::CryptoBackend;
 use crate::error::{CryptoError, CryptoErrorCode, Result};
 use crate::keychain::{SecureStore, Slot};
 use crate::storage::Snapshot;
-use crate::types::{
-    DeviceIdentity, EncryptedEnvelope, OneTimePrekey, PrekeyBundle, SafetyNumber,
-};
+use crate::types::{DeviceIdentity, EncryptedEnvelope, OneTimePrekey, PrekeyBundle, SafetyNumber};
 
 /// Whispr MLS profile identifier — carried in `EncryptedEnvelope::protocol_id`
 /// once Slice 4 begins emitting real ciphertext. Fixed here so the wire tag
@@ -74,8 +72,7 @@ pub const WHISPR_CIPHERSUITE: Ciphersuite =
 /// Human-readable ciphersuite tag matching `WHISPR_CIPHERSUITE`. Written
 /// into persisted snapshots so a future ciphersuite change forces a
 /// deliberate migration path rather than silently reinterpreting bytes.
-pub const WHISPR_CIPHERSUITE_TAG: &str =
-    "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519";
+pub const WHISPR_CIPHERSUITE_TAG: &str = "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519";
 
 /// Default number of KeyPackages Whispr will keep replenished per device.
 /// Publication + replenishment policy is Slice 2; this is only a ceiling
@@ -279,7 +276,10 @@ impl OpenMlsBackend {
         &self,
         signer: &SignatureKeyPair,
         credential_with_key: &CredentialWithKey,
-    ) -> Result<(String /* public wire b64 */, String /* private bundle b64 */)> {
+    ) -> Result<(
+        String, /* public wire b64 */
+        String, /* private bundle b64 */
+    )> {
         let bundle: KeyPackageBundle = KeyPackage::builder()
             .key_package_lifetime(Lifetime::new(KEYPACKAGE_LIFETIME_SECS))
             .build(
@@ -331,8 +331,7 @@ impl OpenMlsBackend {
         }
         let need = REPLENISH_TARGET - current;
         for _ in 0..need {
-            let (_public_b64, bundle_b64) =
-                self.build_one_bundle(&signer, &credential_with_key)?;
+            let (_public_b64, bundle_b64) = self.build_one_bundle(&signer, &credential_with_key)?;
             pkgs.bundles_tls_b64.push(bundle_b64);
         }
         self.persist_keypackages(&pkgs)?;
@@ -410,13 +409,10 @@ impl OpenMlsBackend {
 
         let mut found: Option<usize> = None;
         for (i, b64) in pkgs.bundles_tls_b64.iter().enumerate() {
-            let bytes = decode_b64(b64).map_err(|_| {
-                CryptoError::new(CryptoErrorCode::StorageCorrupt, "bundle b64")
-            })?;
-            let bundle =
-                KeyPackageBundle::tls_deserialize(&mut bytes.as_slice()).map_err(|_| {
-                    CryptoError::new(CryptoErrorCode::StorageCorrupt, "bundle tls")
-                })?;
+            let bytes = decode_b64(b64)
+                .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "bundle b64"))?;
+            let bundle = KeyPackageBundle::tls_deserialize(&mut bytes.as_slice())
+                .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "bundle tls"))?;
             let public_tls = bundle
                 .key_package()
                 .tls_serialize_detached()
@@ -565,12 +561,7 @@ impl CryptoBackend for OpenMlsBackend {
             // the transport layer.
             let round_tripped = KeyPackage::tls_deserialize(&mut public_tls.as_slice())
                 .map_err(|_| CryptoError::internal("keypackage tls_deserialize"))?;
-            if round_tripped
-                .leaf_node()
-                .signature_key()
-                .as_slice()
-                != signer.public()
-            {
+            if round_tripped.leaf_node().signature_key().as_slice() != signer.public() {
                 return Err(CryptoError::internal("keypackage signature key drift"));
             }
             if round_tripped.ciphersuite() != WHISPR_CIPHERSUITE {
@@ -1099,5 +1090,3 @@ mod tests {
         assert_eq!(err.code, CryptoErrorCode::StorageCorrupt);
     }
 }
-
-

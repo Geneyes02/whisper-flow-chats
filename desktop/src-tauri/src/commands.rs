@@ -41,10 +41,19 @@ fn ensure_id(field: &str, value: &str) -> Result<(), WireError> {
         return Err(err(CryptoErrorCode::Internal, &format!("{field}: empty")));
     }
     if value.len() > MAX_ID_LEN {
-        return Err(err(CryptoErrorCode::Internal, &format!("{field}: too long")));
+        return Err(err(
+            CryptoErrorCode::Internal,
+            &format!("{field}: too long"),
+        ));
     }
-    if !value.chars().all(|c| c.is_ascii_graphic() || c == '-' || c == '_' || c == ':') {
-        return Err(err(CryptoErrorCode::Internal, &format!("{field}: invalid characters")));
+    if !value
+        .chars()
+        .all(|c| c.is_ascii_graphic() || c == '-' || c == '_' || c == ':')
+    {
+        return Err(err(
+            CryptoErrorCode::Internal,
+            &format!("{field}: invalid characters"),
+        ));
     }
     Ok(())
 }
@@ -93,17 +102,24 @@ pub fn whispr_crypto_wipe(state: State<'_, HostState>) -> Result<HostStatus, Wir
 // ---- identity + prekeys --------------------------------------------------
 
 #[tauri::command]
-pub fn whispr_crypto_create_identity(state: State<'_, HostState>) -> Result<DeviceIdentity, WireError> {
+pub fn whispr_crypto_create_identity(
+    state: State<'_, HostState>,
+) -> Result<DeviceIdentity, WireError> {
     map(state.0.create_identity())
 }
 
 #[tauri::command]
-pub fn whispr_crypto_load_identity(state: State<'_, HostState>) -> Result<Option<DeviceIdentity>, WireError> {
+pub fn whispr_crypto_load_identity(
+    state: State<'_, HostState>,
+) -> Result<Option<DeviceIdentity>, WireError> {
     map(state.0.load_identity())
 }
 
 #[tauri::command]
-pub fn whispr_crypto_publish_prekeys(state: State<'_, HostState>, count: u32) -> Result<PrekeyBundle, WireError> {
+pub fn whispr_crypto_publish_prekeys(
+    state: State<'_, HostState>,
+    count: u32,
+) -> Result<PrekeyBundle, WireError> {
     if count > 1000 {
         return Err(err(CryptoErrorCode::Internal, "prekey count too large"));
     }
@@ -113,13 +129,19 @@ pub fn whispr_crypto_publish_prekeys(state: State<'_, HostState>, count: u32) ->
 // ---- sessions ------------------------------------------------------------
 
 #[tauri::command]
-pub fn whispr_crypto_establish_session(state: State<'_, HostState>, bundle: PrekeyBundle) -> Result<(), WireError> {
+pub fn whispr_crypto_establish_session(
+    state: State<'_, HostState>,
+    bundle: PrekeyBundle,
+) -> Result<(), WireError> {
     ensure_id("bundle.device_id", &bundle.device_id)?;
     if bundle.identity_public_key.is_empty() {
         return Err(err(CryptoErrorCode::InvalidBundle, "missing identity key"));
     }
     if bundle.one_time_prekeys.len() > 1000 {
-        return Err(err(CryptoErrorCode::InvalidBundle, "too many one-time prekeys"));
+        return Err(err(
+            CryptoErrorCode::InvalidBundle,
+            "too many one-time prekeys",
+        ));
     }
     map(state.0.establish_session(bundle))
 }
@@ -144,7 +166,10 @@ pub fn whispr_crypto_encrypt(
 }
 
 #[tauri::command]
-pub fn whispr_crypto_decrypt(state: State<'_, HostState>, envelope: EncryptedEnvelope) -> Result<Vec<u8>, WireError> {
+pub fn whispr_crypto_decrypt(
+    state: State<'_, HostState>,
+    envelope: EncryptedEnvelope,
+) -> Result<Vec<u8>, WireError> {
     // Structural validation is duplicated at the host layer; performing it
     // here as well keeps the boundary strict even if a future refactor
     // relaxes it deeper down.
@@ -169,7 +194,10 @@ pub fn whispr_crypto_safety_number(
 }
 
 #[tauri::command]
-pub fn whispr_crypto_rotate_session(state: State<'_, HostState>, recipient_device_id: String) -> Result<(), WireError> {
+pub fn whispr_crypto_rotate_session(
+    state: State<'_, HostState>,
+    recipient_device_id: String,
+) -> Result<(), WireError> {
     ensure_id("recipient_device_id", &recipient_device_id)?;
     map(state.0.rotate_session(&recipient_device_id))
 }

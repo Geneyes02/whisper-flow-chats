@@ -25,9 +25,7 @@ use crate::backend::CryptoBackend;
 use crate::error::{CryptoError, CryptoErrorCode, Result};
 use crate::keychain::{SecureStore, Slot};
 use crate::storage::Snapshot;
-use crate::types::{
-    DeviceIdentity, EncryptedEnvelope, OneTimePrekey, PrekeyBundle, SafetyNumber,
-};
+use crate::types::{DeviceIdentity, EncryptedEnvelope, OneTimePrekey, PrekeyBundle, SafetyNumber};
 
 /// Backend name embedded in envelopes and snapshots.
 pub const STUB_BACKEND: &str = "stub-v0";
@@ -59,7 +57,10 @@ impl StubBackend {
                 .into(),
             None => None,
         };
-        Ok(Self { store, state: Mutex::new(restored) })
+        Ok(Self {
+            store,
+            state: Mutex::new(restored),
+        })
     }
 
     fn persist(&self, id: &StubIdentity) -> Result<()> {
@@ -70,11 +71,14 @@ impl StubBackend {
 
     fn require_identity(&self) -> Result<StubIdentity> {
         let guard = self.state.lock();
-        let id = guard.as_ref().ok_or_else(|| {
-            CryptoError::new(CryptoErrorCode::NoIdentity, "no local identity")
-        })?;
+        let id = guard
+            .as_ref()
+            .ok_or_else(|| CryptoError::new(CryptoErrorCode::NoIdentity, "no local identity"))?;
         if id.revoked {
-            return Err(CryptoError::new(CryptoErrorCode::DeviceRevoked, "device revoked"));
+            return Err(CryptoError::new(
+                CryptoErrorCode::DeviceRevoked,
+                "device revoked",
+            ));
         }
         Ok(id.clone())
     }
@@ -95,7 +99,9 @@ fn now_ms() -> i64 {
 }
 
 impl CryptoBackend for StubBackend {
-    fn name(&self) -> &'static str { STUB_BACKEND }
+    fn name(&self) -> &'static str {
+        STUB_BACKEND
+    }
 
     fn create_identity(&self) -> Result<DeviceIdentity> {
         let mut guard = self.state.lock();
@@ -170,11 +176,15 @@ impl CryptoBackend for StubBackend {
 
     fn establish_session(&self, _bundle: PrekeyBundle) -> Result<()> {
         // Fail closed: stub cannot establish a real session.
-        Err(CryptoError::unsupported("stub backend cannot establish sessions"))
+        Err(CryptoError::unsupported(
+            "stub backend cannot establish sessions",
+        ))
     }
 
     fn rotate_session(&self, _recipient_device_id: &str) -> Result<()> {
-        Err(CryptoError::unsupported("stub backend cannot rotate sessions"))
+        Err(CryptoError::unsupported(
+            "stub backend cannot rotate sessions",
+        ))
     }
 
     fn encrypt(
@@ -229,8 +239,7 @@ fn public_view(id: &StubIdentity) -> DeviceIdentity {
 
 // Minimal base64 (URL-safe, no padding) so we don't take a new dependency.
 fn base64(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 64] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
     let mut out = String::with_capacity((bytes.len() * 4 + 2) / 3);
     let mut i = 0;
     while i + 3 <= bytes.len() {
