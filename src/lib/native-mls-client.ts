@@ -296,7 +296,10 @@ export interface FailedNativeEnvelope {
  * Fetch and decrypt pending envelopes for this native device. Envelopes are
  * acknowledged only after successful authenticated decryption.
  */
-export async function receiveNativeMlsMessages(limit = 100): Promise<{
+export async function receiveNativeMlsMessages(
+  limit = 100,
+  conversationId?: string,
+): Promise<{
   messages: DecryptedNativeMessage[];
   failures: FailedNativeEnvelope[];
 }> {
@@ -308,6 +311,7 @@ export async function receiveNativeMlsMessages(limit = 100): Promise<{
   const failures: FailedNativeEnvelope[] = [];
 
   for (const row of pending) {
+    if (conversationId && row.conversation_id !== conversationId) continue;
     try {
       await verifyAndCachePeerIdentity(row.sender_device_id);
       const plaintext = await provider.decryptMessage(wireToEnvelope(row.envelope));
