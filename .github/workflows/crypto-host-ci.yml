@@ -1,15 +1,18 @@
 name: crypto-host CI
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - "desktop/src-tauri/crypto-host/**"
       - "desktop/src-tauri/Cargo.toml"
+      - "desktop/src-tauri/deny.toml"
       - ".github/workflows/crypto-host-ci.yml"
   pull_request:
     paths:
       - "desktop/src-tauri/crypto-host/**"
       - "desktop/src-tauri/Cargo.toml"
+      - "desktop/src-tauri/deny.toml"
       - ".github/workflows/crypto-host-ci.yml"
 
 jobs:
