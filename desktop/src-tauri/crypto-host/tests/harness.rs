@@ -23,7 +23,7 @@ use std::thread;
 use whispr_crypto_host::{
     conformance::{run_host_invariants, Capability},
     error::CryptoErrorCode,
-    keychain::{MemoryStore, Slot},
+    keychain::{MemoryStore, SecureStore, Slot},
     CryptoHost, EncryptedEnvelope, EnvelopeKind, LockState, ProvisioningState, ENVELOPE_VERSION,
     MAX_ID_LEN,
 };
