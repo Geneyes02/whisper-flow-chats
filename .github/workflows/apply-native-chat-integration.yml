@@ -1,0 +1,135 @@
+name: apply native chat integration
+
+on:
+  push:
+    branches:
+      - whispr/e2ee-phase-b
+    paths:
+      - ".github/workflows/apply-native-chat-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: whispr/e2ee-phase-b
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Apply asserted native MLS chat patches
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          app = Path('src/routes/_authenticated/app.tsx')
+          text = app.read_text()
+
+          def replace_once(src: str, old: str, new: str) -> str:
+              count = src.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one match, found {count}: {old[:100]!r}')
+              return src.replace(old, new, 1)
+
+          text = replace_once(
+              text,
+              'import { supabase } from "@/integrations/supabase/client";\n',
+              'import { supabase } from "@/integrations/supabase/client";\n'
+              'import { detectRuntime } from "@/lib/crypto/provider-registry";\n'
+              'import { utf8 } from "@/lib/crypto/encoding";\n'
+              'import { receiveNativeMlsMessages, sendNativeMlsMessage } from "@/lib/native-mls-client";\n',
+          )
+
+          text = replace_once(
+              text,
+              '  const [uploading, setUploading] = useState(false);\n',
+              '  const [uploading, setUploading] = useState(false);\n'
+              '  const [nativeTextByMessageId, setNativeTextByMessageId] = useState<Record<string, string>>({});\n'
+              '  const [nativeSecurityError, setNativeSecurityError] = useState<string | null>(null);\n'
+              '  const isNativeDirect =\n'
+              '    detectRuntime() === "tauri" && conversation.type === "direct" && !!conversation.peer?.id;\n',
+          )
+
+          anchor = '''  useEffect(() => {\n    inputRef.current?.focus();\n  }, [conversation.id]);\n'''
+          inserted = anchor + '''\n  // Native direct-chat inbox. The native receive function only ACKs messages\n  // after authenticated MLS decryption; rows from other conversations are\n  // left pending for their own chat pane.\n  useEffect(() => {\n    if (!isNativeDirect) return;\n    let cancelled = false;\n\n    const pull = async () => {\n      try {\n        const result = await receiveNativeMlsMessages(200, conversation.id);\n        if (cancelled) return;\n        if (result.messages.length > 0) {\n          setNativeTextByMessageId((previous) => {\n            const next = { ...previous };\n            for (const message of result.messages) {\n              next[message.messageId] = utf8.decode(message.plaintext);\n            }\n            return next;\n          });\n          await qc.invalidateQueries({ queryKey: key });\n          await qc.invalidateQueries({ queryKey: ["conversations"] });\n        }\n        if (result.failures.length > 0) {\n          setNativeSecurityError("An encrypted message could not be authenticated. It was not acknowledged.");\n        } else {\n          setNativeSecurityError(null);\n        }\n      } catch (error) {\n        if (!cancelled) {\n          setNativeSecurityError(error instanceof Error ? error.message : "Native E2EE receive failed");\n        }\n      }\n    };\n\n    void pull();\n    const timer = window.setInterval(() => void pull(), 2500);\n    return () => {\n      cancelled = true;\n      window.clearInterval(timer);\n    };\n  }, [conversation.id, isNativeDirect, qc, key]);\n'''
+          text = replace_once(text, anchor, inserted)
+
+          old_send = '''  const sendMut = useMutation({\n    mutationFn: (body: string) =>\n      send({\n        data: {\n          conversationId: conversation.id,\n          text: body,\n          replyToMessageId: replyTo?.id ?? null,\n        },\n      }),\n    onSuccess: () => {\n      setText("");\n      setReplyTo(null);\n      qc.invalidateQueries({ queryKey: key });\n      qc.invalidateQueries({ queryKey: ["conversations"] });\n    },\n  });\n'''
+          new_send = '''  const sendMut = useMutation({\n    mutationFn: async (body: string) => {\n      if (isNativeDirect) {\n        const targetUserId = conversation.peer?.id;\n        if (!targetUserId) throw new Error("Direct-chat peer is unavailable");\n        const result = await sendNativeMlsMessage({\n          conversationId: conversation.id,\n          targetUserId,\n          plaintext: utf8.encode(body),\n        });\n        return { id: result.messageId, nativeText: body };\n      }\n\n      const result = await send({\n        data: {\n          conversationId: conversation.id,\n          text: body,\n          replyToMessageId: replyTo?.id ?? null,\n        },\n      });\n      return { id: result.id, nativeText: null };\n    },\n    onSuccess: (result) => {\n      if (result.nativeText) {\n        setNativeTextByMessageId((previous) => ({\n          ...previous,\n          [result.id]: result.nativeText!,\n        }));\n      }\n      setText("");\n      setReplyTo(null);\n      setNativeSecurityError(null);\n      qc.invalidateQueries({ queryKey: key });\n      qc.invalidateQueries({ queryKey: ["conversations"] });\n    },\n    onError: (error) => {\n      setNativeSecurityError(error instanceof Error ? error.message : "Encrypted send failed");\n    },\n  });\n'''
+          text = replace_once(text, old_send, new_send)
+
+          old_edit = '''  function startEdit(m: ChatMessage) {\n    setReplyTo(null);\n    setEditingId(m.id);\n    setText(m.text);\n    setTimeout(() => inputRef.current?.focus(), 0);\n  }\n'''
+          new_edit = '''  function startEdit(m: ChatMessage) {\n    if (isNativeDirect) {\n      setNativeSecurityError("Editing E2EE messages is disabled until encrypted edit events are implemented.");\n      return;\n    }\n    setReplyTo(null);\n    setEditingId(m.id);\n    setText(m.text);\n    setTimeout(() => inputRef.current?.focus(), 0);\n  }\n'''
+          text = replace_once(text, old_edit, new_edit)
+
+          handle_anchor = '''    async (files: FileList | null) => {\n      if (!files || files.length === 0) return;\n'''
+          handle_new = '''    async (files: FileList | null) => {\n      if (!files || files.length === 0) return;\n      if (isNativeDirect) {\n        setNativeSecurityError(\n          "Encrypted attachments are not enabled yet. Whispr will not upload this file through the plaintext media path.",\n        );\n        return;\n      }\n'''
+          text = replace_once(text, handle_anchor, handle_new)
+          text = text.replace(
+              '    [conversation.id, uploadFn, sendMedia, text, replyTo, qc, key],',
+              '    [conversation.id, uploadFn, sendMedia, text, replyTo, qc, key, isNativeDirect],',
+              1,
+          )
+
+          old_grouped = '''  const grouped = useMemo(() => {\n    const msgs = messages.data ?? [];\n'''
+          new_grouped = '''  const displayMessages = useMemo(\n    () =>\n      (messages.data ?? []).map((message) => {\n        const nativeText = nativeTextByMessageId[message.id];\n        return nativeText === undefined ? message : { ...message, text: nativeText };\n      }),\n    [messages.data, nativeTextByMessageId],\n  );\n\n  const grouped = useMemo(() => {\n    const msgs = displayMessages;\n'''
+          text = replace_once(text, old_grouped, new_grouped)
+          text = text.replace(
+              '  }, [messages.data, conversation.type, currentUserId]);',
+              '  }, [displayMessages, conversation.type, currentUserId]);',
+              1,
+          )
+          text = replace_once(
+              text,
+              '''  const pinnedMsg = useMemo(\n    () => (messages.data ?? []).find((m) => m.is_pinned && !m.deleted_at),\n    [messages.data],\n  );\n''',
+              '''  const pinnedMsg = useMemo(\n    () => displayMessages.find((m) => m.is_pinned && !m.deleted_at),\n    [displayMessages],\n  );\n''',
+          )
+
+          header_anchor = '''      {/* pinned banner */}\n'''
+          security_banner = '''      {nativeSecurityError && (\n        <div className="border-b border-amber-500/20 bg-amber-500/5 px-4 py-2 text-xs text-amber-200 md:px-5">\n          {nativeSecurityError}\n        </div>\n      )}\n\n      {/* pinned banner */}\n'''
+          text = replace_once(text, header_anchor, security_banner)
+
+          app.write_text(text)
+
+          native = Path('src/lib/native-mls-client.ts')
+          nt = native.read_text()
+          nt, n = re.subn(
+              r'export async function receiveNativeMlsMessages\(limit = 100\): Promise<\{',
+              'export async function receiveNativeMlsMessages(\n  limit = 100,\n  conversationId?: string,\n): Promise<{',
+              nt,
+              count=1,
+          )
+          if n != 1:
+              raise SystemExit(f'expected receive signature match once, got {n}')
+          loop = '  for (const row of pending) {\n    try {'
+          if loop not in nt:
+              raise SystemExit('receive loop anchor not found')
+          nt = nt.replace(
+              loop,
+              '  for (const row of pending) {\n    if (conversationId && row.conversation_id !== conversationId) continue;\n    try {',
+              1,
+          )
+          native.write_text(nt)
+          PY
+      - name: Format patched files
+        run: bun x prettier --write src/routes/_authenticated/app.tsx src/lib/native-mls-client.ts
+      - name: Validate patched files
+        run: >-
+          bun x eslint
+          src/routes/_authenticated/app.tsx
+          src/lib/native-mls-client.ts
+      - name: Commit integration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/routes/_authenticated/app.tsx src/lib/native-mls-client.ts
+          git commit -m "feat(e2ee): route native direct chats through MLS"
+          git push origin HEAD:whispr/e2ee-phase-b
