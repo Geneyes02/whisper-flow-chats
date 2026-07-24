@@ -62,3 +62,57 @@ jobs:
             exit 1
           fi
           echo "OK: crypto-host refused to build with no backend"
+
+  openmls-baseline:
+    name: openmls baseline (audit + license)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop/src-tauri/crypto-host
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+
+      - name: Install libsecret (Linux)
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libsecret-1-dev
+
+      - name: Install cargo-audit + cargo-deny
+        run: cargo install --locked cargo-audit cargo-deny
+
+      - name: Resolve openmls feature (generates Cargo.lock entries)
+        run: cargo check --no-default-features --features backend-openmls
+
+      # Fail-closed against RUSTSEC advisories affecting the pinned
+      # openmls/openmls_rust_crypto/openmls_traits graph. If this reports
+      # any vulnerability, Phase B lifecycle work is blocked until the
+      # pin is bumped and docs/OPENMLS-BASELINE.md is updated.
+      - name: cargo audit
+        working-directory: desktop/src-tauri
+        run: cargo audit --deny warnings
+
+      # License / source / bans policy is enforced by desktop/src-tauri/deny.toml.
+      # Absence of that file is intentional today (no openmls feature is
+      # activated in default builds). Add + commit deny.toml in the PR that
+      # actually flips backend-openmls on.
+      - name: cargo deny (if configured)
+        working-directory: desktop/src-tauri
+        run: |
+          if [ -f deny.toml ]; then
+            cargo deny check licenses bans sources
+          else
+            echo "deny.toml not present yet — skipping (see docs/OPENMLS-BASELINE.md)"
+          fi
+
+      - name: Upload resolved Cargo.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock-openmls
+          path: desktop/src-tauri/Cargo.lock
+
