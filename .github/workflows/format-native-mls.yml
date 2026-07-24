@@ -1,0 +1,46 @@
+name: format native MLS files
+
+on:
+  push:
+    branches:
+      - whispr/e2ee-phase-b
+    paths:
+      - ".github/workflows/format-native-mls.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: whispr/e2ee-phase-b
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Apply repository Prettier rules
+        run: >-
+          bun x prettier --write
+          src/lib/crypto/types.ts
+          src/lib/crypto/encoding.ts
+          src/lib/crypto/libsignal-bridge.ts
+          src/lib/crypto/provider-registry.ts
+          src/lib/native-mls-client.ts
+          src/lib/native-mls.functions.ts
+          src/lib/mls-directory.functions.ts
+      - name: Commit formatting if needed
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Prettier already clean"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib
+          git commit -m "style(e2ee): apply Prettier"
+          git push origin HEAD:whispr/e2ee-phase-b
