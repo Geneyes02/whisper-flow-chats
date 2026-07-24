@@ -18,6 +18,11 @@ license = "MIT OR Apache-2.0"
 #   backend-libsignal  — thin adapter over libsignal-protocol.
 #                        DO NOT enable until docs/ADR-LIBSIGNAL-LICENSING.md
 #                        is resolved. libsignal is AGPL-3.0.
+#   backend-openmls    — MLS (RFC 9420) via openmls + openmls_rust_crypto.
+#                        Scaffold only — see docs/OPENMLS-BASELINE.md.
+#                        Refuses every messaging op until Phase B lands
+#                        credentials, KeyPackages, groups, and the full
+#                        conformance suite.
 #
 # Exactly one backend must be selected. If none is selected, the crate
 # refuses to compile so we never accidentally ship an unencrypted build.
@@ -27,6 +32,7 @@ license = "MIT OR Apache-2.0"
 default = ["backend-stub"]
 backend-stub = []
 backend-libsignal = ["dep:libsignal-protocol"]
+backend-openmls = ["dep:openmls", "dep:openmls_rust_crypto", "dep:openmls_traits"]
 
 [dependencies]
 serde         = { version = "1", features = ["derive"] }
@@ -45,6 +51,13 @@ keyring       = "3"
 
 # Backend-libsignal — gated. Not resolved unless the feature is on.
 libsignal-protocol = { version = "0.60", optional = true }
+
+# Backend-openmls — gated. Pinned; see docs/OPENMLS-BASELINE.md.
+# Do NOT bump these without updating the baseline document and re-running
+# the messaging conformance suite.
+openmls              = { version = "=0.6.0", optional = true }
+openmls_rust_crypto  = { version = "=0.3.0", optional = true }
+openmls_traits       = { version = "=0.3.0", optional = true }
 
 [dev-dependencies]
 tempfile = "3"

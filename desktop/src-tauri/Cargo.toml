@@ -30,6 +30,9 @@ default = []
 # Opt-in build: cargo build --features libsignal
 # Requires legal review — see docs/ADR-LIBSIGNAL-LICENSING.md
 libsignal = ["whispr-crypto-host/backend-libsignal"]
+# Opt-in build: cargo build --features openmls
+# Scaffold only until Phase B lands — see docs/OPENMLS-BASELINE.md
+openmls = ["whispr-crypto-host/backend-openmls"]
 
 [profile.release]
 panic = "abort"
