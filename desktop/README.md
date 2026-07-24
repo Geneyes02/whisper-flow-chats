@@ -54,9 +54,9 @@ git push origin v0.1.0
 ```
 
 The workflow builds a signed, notarized universal `.dmg` and attaches it to
-a GitHub release. The `/download` page's `MAC_DMG_URL` points at
-`releases/latest/download/Whispr.dmg` — update the `OWNER/REPO` placeholder
-in `src/routes/download.tsx` once your GitHub repo exists.
+a GitHub release. The `/download` page's `MAC_DMG_URL` defaults to
+`https://github.com/whispr/whispr/releases/latest/download/Whispr.dmg`.
+Update it in `src/routes/download.tsx` if your GitHub owner/repo is different.
 
 ## Windows
 
