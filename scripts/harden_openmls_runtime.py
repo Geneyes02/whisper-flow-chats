@@ -88,12 +88,24 @@ seal = replace_once(
 )
 seal = replace_once(
     seal,
+    "        .encrypt(nonce, Payload { msg: plaintext, aad })\n",
+    "        .encrypt(&nonce, Payload { msg: plaintext, aad })\n",
+    "seal nonce borrow",
+)
+seal = replace_once(
+    seal,
     "    let nonce = Nonce::from_slice(&blob[1..1 + NONCE_LEN]);\n",
     '''    let nonce = Nonce::try_from(&blob[1..1 + NONCE_LEN]).map_err(|_| {
         CryptoError::new(CryptoErrorCode::BadCiphertext, "local sealed nonce length")
     })?;
 ''',
     "open nonce",
+)
+seal = replace_once(
+    seal,
+    "            nonce,\n",
+    "            &nonce,\n",
+    "open nonce borrow",
 )
 seal_path.write_text(seal)
 
