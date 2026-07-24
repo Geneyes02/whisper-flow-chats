@@ -144,4 +144,32 @@ jobs:
       - name: test (openmls backend)
         run: cargo test --no-default-features --features backend-openmls -- --nocapture
 
+  openmls-slice2:
+    name: openmls Slice 2 (KeyPackage lifecycle)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop/src-tauri/crypto-host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri
+      - name: Install libsecret (Linux)
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libsecret-1-dev
+
+      # Slice 2 gate: adversarial KeyPackage-lifecycle tests must pass.
+      # Runs exactly the same `cargo test` binary as Slice 1 (the two
+      # slices live in one crate), but pinned to the `s2_` test filter
+      # so a Slice-2 regression is attributed directly. Slice 1 tests
+      # still gate green in the `openmls-slice1` job.
+      - name: clippy (openmls backend, deny warnings)
+        run: cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings
+      - name: test — Slice 2 lifecycle (backend-openmls)
+        run: cargo test --no-default-features --features backend-openmls s2_ -- --nocapture
+
+
 
