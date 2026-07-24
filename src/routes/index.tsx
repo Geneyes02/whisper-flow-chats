@@ -179,15 +179,16 @@ function Hero() {
           </p>
 
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <a
-              href="#download"
+            <Link
+              to="/download"
               className="group inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-medium text-background transition-transform active:scale-[0.98]"
             >
               Download Whispr
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-0.5">
                 <path d="M12 5v14M5 12l7 7 7-7" />
               </svg>
-            </a>
+            </Link>
+
             <a
               href="#features"
               className="inline-flex items-center gap-2 rounded-full border border-border bg-white/[0.02] px-5 py-3 text-sm font-medium text-foreground transition-colors hover:bg-white/[0.06]"
