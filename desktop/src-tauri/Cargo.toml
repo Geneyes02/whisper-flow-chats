@@ -1,3 +1,7 @@
+[workspace]
+members = [".", "crypto-host"]
+resolver = "2"
+
 [package]
 name = "whispr-desktop"
 version = "0.1.0"
@@ -12,6 +16,20 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["sync", "rt-multi-thread", "macros"] }
+whispr-crypto-host = { path = "crypto-host", default-features = false, features = ["backend-stub"] }
+
+# NOTE: libsignal is intentionally NOT linked here.
+# It is gated behind the `backend-libsignal` feature of `whispr-crypto-host`
+# and remains unresolved until the licensing question in
+# docs/ADR-LIBSIGNAL-LICENSING.md is answered. See that ADR before flipping.
+
+[features]
+default = []
+# Opt-in build: cargo build --features libsignal
+# Requires legal review — see docs/ADR-LIBSIGNAL-LICENSING.md
+libsignal = ["whispr-crypto-host/backend-libsignal"]
 
 [profile.release]
 panic = "abort"
