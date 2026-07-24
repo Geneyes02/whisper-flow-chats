@@ -120,10 +120,13 @@ export async function assertConsumedKeyPackageIntegrity(row: {
   key_package_b64: string;
 }): Promise<void> {
   const bytes = base64ToBytes(row.key_package_b64);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  const buf = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buf).set(bytes);
+  const digest = await crypto.subtle.digest('SHA-256', buf);
   const hex = Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
+
   if (hex !== row.key_package_hash) {
     throw new Error(
       'key_package_substitution_detected: server-returned bytes do not match declared hash',
