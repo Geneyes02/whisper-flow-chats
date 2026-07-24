@@ -77,16 +77,38 @@ jobs:
         run: cargo check --no-default-features --features backend-openmls
       - name: cargo audit
         working-directory: desktop/src-tauri
-        run: cargo audit --deny warnings
-      - name: cargo deny (if configured)
-        working-directory: desktop/src-tauri
+        shell: bash
         run: |
+          set +e
+          cargo audit --deny warnings > /tmp/cargo-audit.log 2>&1
+          status=$?
+          cat /tmp/cargo-audit.log
+          exit $status
+      - name: cargo deny (if configured)
+        if: always()
+        working-directory: desktop/src-tauri
+        shell: bash
+        run: |
+          set +e
           if [ -f deny.toml ]; then
-            cargo deny check licenses bans sources
+            cargo deny check licenses bans sources > /tmp/cargo-deny.log 2>&1
+            status=$?
+            cat /tmp/cargo-deny.log
+            exit $status
           else
-            echo "deny.toml not present yet — skipping (see docs/OPENMLS-BASELINE.md)"
+            echo "deny.toml not present yet — skipping (see docs/OPENMLS-BASELINE.md)" | tee /tmp/cargo-deny.log
           fi
+      - name: Upload audit diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmls-audit-diagnostics
+          path: |
+            /tmp/cargo-audit.log
+            /tmp/cargo-deny.log
+          if-no-files-found: warn
       - name: Upload resolved Cargo.lock
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cargo-lock-openmls
