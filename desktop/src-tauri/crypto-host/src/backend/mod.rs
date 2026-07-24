@@ -21,10 +21,14 @@ pub trait CryptoBackend: Send + Sync {
     /// [`EncryptedEnvelope::protocol_id`] field and in
     /// [`crate::api::BackendInfo`]. Default: `"whispr-none"` for backends
     /// that intentionally do not carry a real protocol (e.g. the stub).
-    fn protocol_id(&self) -> &'static str { "whispr-none" }
+    fn protocol_id(&self) -> &'static str {
+        "whispr-none"
+    }
 
     /// Protocol version the backend implements. Default: 0.
-    fn protocol_version(&self) -> u16 { 0 }
+    fn protocol_version(&self) -> u16 {
+        0
+    }
 
     // ---- identity ------------------------------------------------------
 
@@ -42,25 +46,27 @@ pub trait CryptoBackend: Send + Sync {
 
     // ---- prekeys -------------------------------------------------------
 
-    /// Generate and persist `count` one-time prekeys plus a fresh signed
-    /// prekey, returning the public bundle to publish to the directory.
+    /// Generate and persist `count` one-time prekeys / MLS KeyPackages and
+    /// return only their public wire representation for directory publishing.
     fn publish_prekeys(&self, count: u32) -> Result<PrekeyBundle>;
 
     // ---- sessions ------------------------------------------------------
 
     /// Establish a session with a peer given their published prekey bundle.
-    /// A no-op if a session already exists with the same identity key;
-    /// returns `IdentityMismatch` if the peer's identity key changed.
+    /// MLS backends create a two-device group and queue the Welcome for the
+    /// first encrypted envelope; callers never receive private group state.
     fn establish_session(&self, bundle: PrekeyBundle) -> Result<()>;
 
-    /// Rotate the session with a peer (fresh ratchet chain).
+    /// Rotate the session with a peer. MLS backends perform a self-update and
+    /// queue the resulting Commit for delivery before the next application
+    /// message.
     fn rotate_session(&self, recipient_device_id: &str) -> Result<()>;
 
     // ---- messaging -----------------------------------------------------
 
     /// Encrypt `plaintext` for `recipient_device_id`. `aad` is bound into
-    /// the AEAD tag so tampering with routing metadata invalidates the
-    /// ciphertext.
+    /// the protocol message so tampering with routing metadata invalidates
+    /// the ciphertext.
     fn encrypt(
         &self,
         recipient_device_id: &str,
@@ -86,8 +92,17 @@ pub mod stub;
 #[cfg(feature = "backend-libsignal")]
 pub mod libsignal;
 
+/// Historical Slice 1/2 adapter and its regression tests. Kept compiled
+/// while the production runtime rolls out so the earlier KeyPackage gates
+/// remain active.
 #[cfg(feature = "backend-openmls")]
 pub mod openmls;
+
+/// Production-candidate native MLS runtime: real group creation/Welcome,
+/// application messages, epoch rotation, replay rejection and atomic
+/// provider-state persistence.
+#[cfg(feature = "backend-openmls")]
+pub mod openmls_runtime;
 
 /// Build the backend selected by Cargo features.
 ///
@@ -96,13 +111,14 @@ pub mod openmls;
 ///
 /// Precedence when more than one backend feature is compiled in (e.g. a
 /// developer local build): `backend-openmls` > `backend-libsignal` >
-/// `backend-stub`. Default project builds ship only `backend-stub`.
+/// `backend-stub`. Default project builds still ship only `backend-stub`
+/// until the OpenMLS integration gates are explicitly promoted.
 pub fn build_default_backend(
     store: std::sync::Arc<dyn crate::keychain::SecureStore>,
 ) -> Result<Box<dyn CryptoBackend>> {
     #[cfg(feature = "backend-openmls")]
     {
-        return Ok(Box::new(openmls::OpenMlsBackend::new(store)?));
+        return Ok(Box::new(openmls_runtime::OpenMlsRuntimeBackend::new(store)?));
     }
 
     #[cfg(all(feature = "backend-libsignal", not(feature = "backend-openmls")))]
