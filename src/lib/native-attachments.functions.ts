@@ -8,11 +8,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 
 const ConversationId = z.string().uuid();
 
 async function requireConversationMember(
-  supabase: Parameters<Parameters<typeof createServerFn>[0]>[0] extends never ? never : any,
+  supabase: SupabaseClient<Database>,
   conversationId: string,
   userId: string,
 ): Promise<void> {
@@ -33,7 +35,11 @@ export const createNativeEncryptedAttachmentUpload = createServerFn({ method: "P
     z
       .object({
         conversationId: ConversationId,
-        ciphertextSize: z.number().int().positive().max(100 * 1024 * 1024),
+        ciphertextSize: z
+          .number()
+          .int()
+          .positive()
+          .max(100 * 1024 * 1024),
       })
       .parse(data),
   )
@@ -43,7 +49,8 @@ export const createNativeEncryptedAttachmentUpload = createServerFn({ method: "P
     const { data: signed, error } = await context.supabase.storage
       .from("chat-media")
       .createSignedUploadUrl(storagePath);
-    if (error || !signed) throw new Error(error?.message ?? "Could not create encrypted upload URL");
+    if (error || !signed)
+      throw new Error(error?.message ?? "Could not create encrypted upload URL");
     return {
       storagePath,
       token: signed.token,

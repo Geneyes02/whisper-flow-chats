@@ -9,6 +9,11 @@
 import { getCryptoProvider, detectRuntime } from "./crypto/provider-registry";
 import { CryptoError, type EncryptedEnvelope, type PrekeyBundle } from "./crypto/types";
 import { storeNativeHistoryMessage } from "./native-local-history";
+import {
+  decodeNativePayload,
+  payloadPreview,
+  type NativeMessagePayload,
+} from "./native-message-payload";
 import { fromBase64, fromPgHex, toBase64, toBase64Url, utf8 } from "./crypto/encoding";
 import {
   assertConsumedKeyPackageIntegrity,
@@ -266,6 +271,7 @@ export async function sendNativeMlsMessage(input: {
   conversationId: string;
   targetUserId: string;
   plaintext: Uint8Array;
+  messageId?: string;
 }): Promise<{
   messageId: string;
   recipientDeviceCount: number;
@@ -288,7 +294,7 @@ export async function sendNativeMlsMessage(input: {
     targetMap.set(device.device_id, { deviceId: device.device_id, userId: local.userId });
   }
 
-  const messageId = crypto.randomUUID();
+  const messageId = input.messageId ?? crypto.randomUUID();
   const aad = utf8.encode(
     JSON.stringify({ conversation_id: input.conversationId, message_id: messageId }),
   );
@@ -306,11 +312,13 @@ export async function sendNativeMlsMessage(input: {
     },
   });
 
+  const sentPayload = decodeNativePayload(input.plaintext);
   await storeNativeHistoryMessage({
     conversationId: input.conversationId,
     messageId,
     payload: {
-      text: utf8.decode(input.plaintext),
+      text: payloadPreview(sentPayload),
+      nativePayload: sentPayload,
       senderUserId: local.userId,
       senderDeviceId: local.deviceId,
       direction: "sent",
@@ -332,6 +340,7 @@ export interface DecryptedNativeMessage {
   senderUserId: string;
   senderDeviceId: string;
   plaintext: Uint8Array;
+  payload: NativeMessagePayload;
   createdAt: string;
 }
 
@@ -364,11 +373,13 @@ export async function receiveNativeMlsMessages(
     try {
       await verifyAndCachePeerIdentity(row.sender_device_id);
       const plaintext = await provider.decryptMessage(wireToEnvelope(row.envelope));
+      const decodedPayload = decodeNativePayload(plaintext);
       await storeNativeHistoryMessage({
         conversationId: row.conversation_id,
         messageId: row.message_id,
         payload: {
-          text: utf8.decode(plaintext),
+          text: payloadPreview(decodedPayload),
+          nativePayload: decodedPayload,
           senderUserId: row.sender_user_id,
           senderDeviceId: row.sender_device_id,
           direction: row.sender_user_id === local.userId ? "sent" : "received",
@@ -383,6 +394,7 @@ export async function receiveNativeMlsMessages(
         senderUserId: row.sender_user_id,
         senderDeviceId: row.sender_device_id,
         plaintext,
+        payload: decodedPayload,
         createdAt: row.created_at,
       });
     } catch (error) {

@@ -8,6 +8,7 @@
 import { detectRuntime } from "./crypto/provider-registry";
 import { utf8 } from "./crypto/encoding";
 import { CryptoError } from "./crypto/types";
+import type { NativeMessagePayload } from "./native-message-payload";
 
 const DB_NAME = "whispr-native-history-v1";
 const STORE = "messages";
@@ -22,6 +23,7 @@ type HistoryRecord = {
 
 export type NativeHistoryPayload = {
   text: string;
+  nativePayload?: NativeMessagePayload;
   senderUserId: string;
   senderDeviceId: string;
   direction: "sent" | "received";

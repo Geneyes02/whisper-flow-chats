@@ -52,16 +52,27 @@ export function decodeNativePayload(bytes: Uint8Array): NativeMessagePayload {
   }
   if (value.type === "attachment") {
     const attachment = (value as Partial<NativeAttachmentPayload>).attachment;
-    if (!attachment || typeof attachment !== "object") throw new Error("Invalid attachment payload");
+    if (!attachment || typeof attachment !== "object")
+      throw new Error("Invalid attachment payload");
     const a = attachment as NativeAttachmentPayload["attachment"];
-    for (const field of ["storagePath", "keyB64Url", "nonceB64Url", "aadB64Url", "filename", "mimeType"] as const) {
+    for (const field of [
+      "storagePath",
+      "keyB64Url",
+      "nonceB64Url",
+      "aadB64Url",
+      "filename",
+      "mimeType",
+    ] as const) {
       if (typeof a[field] !== "string" || a[field].length === 0) {
         throw new Error(`Invalid encrypted attachment field: ${field}`);
       }
     }
-    if (!Number.isSafeInteger(a.originalSize) || a.originalSize < 0) throw new Error("Invalid original size");
-    if (!Number.isSafeInteger(a.ciphertextSize) || a.ciphertextSize <= 0) throw new Error("Invalid ciphertext size");
-    if (a.caption !== undefined && typeof a.caption !== "string") throw new Error("Invalid attachment caption");
+    if (!Number.isSafeInteger(a.originalSize) || a.originalSize < 0)
+      throw new Error("Invalid original size");
+    if (!Number.isSafeInteger(a.ciphertextSize) || a.ciphertextSize <= 0)
+      throw new Error("Invalid ciphertext size");
+    if (a.caption !== undefined && typeof a.caption !== "string")
+      throw new Error("Invalid attachment caption");
     return { v: 1, type: "attachment", attachment: { ...a } };
   }
   throw new Error("Unknown Whispr native payload type");
