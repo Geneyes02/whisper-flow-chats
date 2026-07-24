@@ -1,11 +1,6 @@
 name: rustfmt apply (Phase B branch)
 
 on:
-  push:
-    branches:
-      - whispr/e2ee-phase-b
-    paths:
-      - .github/workflows/rustfmt-apply.yml
   workflow_dispatch:
 
 permissions:
