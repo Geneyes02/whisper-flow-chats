@@ -57,6 +57,8 @@ jobs:
             aud text,
             role text,
             instance_id uuid,
+            raw_user_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb,
+            raw_app_meta_data jsonb NOT NULL DEFAULT '{}'::jsonb,
             created_at timestamptz DEFAULT now(),
             updated_at timestamptz DEFAULT now()
           );
