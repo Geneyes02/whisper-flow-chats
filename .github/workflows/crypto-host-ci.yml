@@ -28,30 +28,23 @@ jobs:
         working-directory: desktop/src-tauri/crypto-host
     steps:
       - uses: actions/checkout@v4
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: desktop/src-tauri
-
       - name: Install libsecret (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libsecret-1-dev
-
       - name: rustfmt
         run: cargo fmt --all -- --check
-
       - name: clippy (stub backend, deny warnings)
         run: cargo clippy --no-default-features --features backend-stub --all-targets -- -D warnings
-
       - name: test (stub backend)
         run: cargo test --no-default-features --features backend-stub -- --nocapture
-
       - name: guardrail — no backend must fail to build
         shell: bash
         run: |
@@ -153,21 +146,32 @@ jobs:
         with:
           components: rustfmt, clippy
       - name: Install libsecret (Linux)
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libsecret-1-dev
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev >/dev/null
       - name: rustfmt diagnostic
+        id: fmt
         shell: bash
         run: |
           set +e
           cargo fmt --all -- --check > /tmp/fmt.log 2>&1
           status=$?
-          tail -n 120 /tmp/fmt.log
+          tail -n 80 /tmp/fmt.log
           exit $status
       - name: openmls compile diagnostic
+        id: check
         if: always()
         shell: bash
         run: |
           set +e
           cargo check --no-default-features --features backend-openmls > /tmp/check.log 2>&1
           status=$?
-          tail -n 180 /tmp/check.log
+          tail -n 120 /tmp/check.log
           exit $status
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmls-diagnostics
+          path: |
+            /tmp/fmt.log
+            /tmp/check.log
+          if-no-files-found: warn
