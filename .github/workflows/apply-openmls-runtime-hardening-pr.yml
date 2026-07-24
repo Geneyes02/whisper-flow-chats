@@ -7,6 +7,7 @@ on:
       - ".github/workflows/apply-openmls-runtime-hardening-pr.yml"
       - "desktop/src-tauri/crypto-host/src/backend/openmls_runtime.rs"
       - "desktop/src-tauri/crypto-host/src/local_seal.rs"
+      - "desktop/src-tauri/crypto-host/tests/harness.rs"
       - "desktop/src-tauri/Cargo.toml"
 
 permissions:
@@ -75,6 +76,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add desktop/src-tauri/crypto-host/src/backend/openmls_runtime.rs \
                   desktop/src-tauri/crypto-host/src/local_seal.rs \
+                  desktop/src-tauri/crypto-host/tests/harness.rs \
                   desktop/src-tauri/Cargo.toml
           git commit -m "fix(e2ee): contain hostile OpenMLS ciphertext panics"
           git push origin HEAD:whispr/e2ee-phase-b
