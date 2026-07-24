@@ -86,19 +86,35 @@ pub mod stub;
 #[cfg(feature = "backend-libsignal")]
 pub mod libsignal;
 
+#[cfg(feature = "backend-openmls")]
+pub mod openmls;
+
 /// Build the backend selected by Cargo features.
 ///
 /// Exactly one backend feature is active (enforced by `lib.rs`). The
 /// backend uses `store` for all persistent secret material.
+///
+/// Precedence when more than one backend feature is compiled in (e.g. a
+/// developer local build): `backend-openmls` > `backend-libsignal` >
+/// `backend-stub`. Default project builds ship only `backend-stub`.
 pub fn build_default_backend(
     store: std::sync::Arc<dyn crate::keychain::SecureStore>,
 ) -> Result<Box<dyn CryptoBackend>> {
-    #[cfg(feature = "backend-libsignal")]
+    #[cfg(feature = "backend-openmls")]
+    {
+        return Ok(Box::new(openmls::OpenMlsBackend::new(store)?));
+    }
+
+    #[cfg(all(feature = "backend-libsignal", not(feature = "backend-openmls")))]
     {
         return Ok(Box::new(libsignal::LibsignalBackend::new(store)?));
     }
 
-    #[cfg(all(feature = "backend-stub", not(feature = "backend-libsignal")))]
+    #[cfg(all(
+        feature = "backend-stub",
+        not(feature = "backend-libsignal"),
+        not(feature = "backend-openmls")
+    ))]
     {
         return Ok(Box::new(stub::StubBackend::new(store)?));
     }

@@ -47,8 +47,12 @@ pub use types::*;
 
 // Compile-time guard: exactly one backend must be selected. This prevents
 // an accidental "no backend" build that would silently be non-functional.
-#[cfg(not(any(feature = "backend-stub", feature = "backend-libsignal")))]
+#[cfg(not(any(
+    feature = "backend-stub",
+    feature = "backend-libsignal",
+    feature = "backend-openmls"
+)))]
 compile_error!(
     "whispr-crypto-host: no backend feature selected. \
-     Enable exactly one of `backend-stub` or `backend-libsignal`."
+     Enable exactly one of `backend-stub`, `backend-libsignal`, or `backend-openmls`."
 );
