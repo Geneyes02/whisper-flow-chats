@@ -6,10 +6,9 @@
 //! KWallet). The `keyring` crate selects the right backend at compile time
 //! for the host target.
 //!
-//! We store *sealed blobs* here — the backend chooses the format (a
-//! libsignal `IdentityKeyStore` snapshot, a serialized session store, an
-//! at-rest encryption key for the session DB, etc.). The keychain treats
-//! them as opaque strings.
+//! We store *sealed blobs* here — the backend chooses the format (an MLS
+//! provider snapshot, a serialized session store, an at-rest encryption key
+//! for the session DB, etc.). The keychain treats them as opaque strings.
 //!
 //! Failure modes:
 //!   * Keychain locked / user denied access → `StorageLocked`
@@ -169,6 +168,15 @@ impl MemoryStore {
     pub fn inject(&self, slot: Slot, value: &str) {
         self.inner.lock().insert(slot.account(), value.to_string());
     }
+
+    /// Read a raw slot only from test builds. This intentionally bypasses the
+    /// `SecureStore` result wrapper so unit tests can assert that a public API
+    /// response is not the private persisted snapshot. It is not compiled into
+    /// production binaries.
+    #[cfg(test)]
+    pub fn inject_for_test_read(&self, slot: Slot) -> Option<String> {
+        self.inner.lock().get(slot.account()).cloned()
+    }
 }
 
 impl Default for MemoryStore {
@@ -181,10 +189,12 @@ impl SecureStore for MemoryStore {
     fn get(&self, slot: Slot) -> Result<Option<String>> {
         Ok(self.inner.lock().get(slot.account()).cloned())
     }
+
     fn put(&self, slot: Slot, value: &str) -> Result<()> {
         self.inner.lock().insert(slot.account(), value.to_string());
         Ok(())
     }
+
     fn delete(&self, slot: Slot) -> Result<()> {
         self.inner.lock().remove(slot.account());
         Ok(())
