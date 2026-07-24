@@ -502,7 +502,7 @@ export const forwardMessage = createServerFn({ method: "POST" })
       .insert({
         conversation_id: data.targetConversationId,
         sender_id: userId,
-        content_type: src.content_type as string,
+        content_type: src.content_type as "text" | "image" | "video" | "audio" | "voice" | "file" | "gif" | "sticker",
         status: "sent",
         ciphertext: src.ciphertext as string,
         ciphertext_algorithm: "plaintext-transit",
