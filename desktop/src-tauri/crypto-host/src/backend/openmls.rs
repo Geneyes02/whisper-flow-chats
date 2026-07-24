@@ -29,7 +29,9 @@ use crate::types::{DeviceIdentity, EncryptedEnvelope, PrekeyBundle, SafetyNumber
 pub const WHISPR_MLS_PROFILE: &str = "whispr-mls-v1";
 
 /// Ciphersuite pinned by the baseline document. Recorded as a constant so
-/// any change is a reviewable diff.
+/// any change is a reviewable diff. Verify at runtime that the pinned
+/// OpenMLS release (see `docs/OPENMLS-BASELINE.md`) still exposes this
+/// suite before enabling any messaging op.
 pub const WHISPR_MLS_CIPHERSUITE: &str =
     "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519";
 
