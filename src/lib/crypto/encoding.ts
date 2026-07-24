@@ -4,7 +4,6 @@ export function toBase64(bytes: Uint8Array): string {
   let s = '';
   for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]!);
   if (typeof btoa !== 'undefined') return btoa(s);
-  // Node fallback
   return Buffer.from(bytes).toString('base64');
 }
 
@@ -16,6 +15,18 @@ export function fromBase64(input: string): Uint8Array {
     return out;
   }
   return new Uint8Array(Buffer.from(input, 'base64'));
+}
+
+/** RFC 4648 base64url without padding — the native Rust host's wire format. */
+export function toBase64Url(bytes: Uint8Array): string {
+  return toBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+/** Decode RFC 4648 base64url with or without padding. */
+export function fromBase64Url(input: string): Uint8Array {
+  const standard = input.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = standard + '='.repeat((4 - (standard.length % 4)) % 4);
+  return fromBase64(padded);
 }
 
 /** Postgres bytea hex format: '\x' + hex. */
