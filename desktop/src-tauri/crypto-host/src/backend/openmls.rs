@@ -37,13 +37,15 @@ use std::sync::Arc;
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use openmls::prelude::{
-    Ciphersuite, Credential, CredentialWithKey, KeyPackage, KeyPackageBundle,
+    Ciphersuite, Credential, CredentialType, CredentialWithKey, KeyPackage, KeyPackageBundle,
+    KeyPackageIn, Lifetime, ProtocolVersion,
 };
 use openmls_basic_credential::SignatureKeyPair;
 use openmls_rust_crypto::OpenMlsRustCrypto;
-use openmls_traits::types::SignatureScheme;
+use openmls_traits::{types::SignatureScheme, OpenMlsProvider};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tls_codec::{Deserialize as _, Serialize as _};
 
 use crate::backend::CryptoBackend;
