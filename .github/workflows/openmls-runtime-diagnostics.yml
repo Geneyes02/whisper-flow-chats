@@ -1,0 +1,41 @@
+name: OpenMLS runtime diagnostics
+
+on:
+  pull_request:
+    paths:
+      - "desktop/src-tauri/crypto-host/src/backend/openmls_runtime.rs"
+      - "desktop/src-tauri/crypto-host/src/local_seal.rs"
+      - "desktop/src-tauri/crypto-host/src/api.rs"
+      - "desktop/src-tauri/crypto-host/src/lib.rs"
+      - "desktop/src-tauri/crypto-host/tests/harness.rs"
+      - "desktop/src-tauri/crypto-host/Cargo.toml"
+      - ".github/workflows/openmls-runtime-diagnostics.yml"
+  workflow_dispatch:
+
+jobs:
+  runtime-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop/src-tauri/crypto-host
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install libsecret
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev >/dev/null
+      - name: Run OpenMLS runtime tests with focused log
+        shell: bash
+        run: |
+          set +e
+          cargo test --no-default-features --features backend-openmls -- --nocapture > /tmp/openmls-runtime-tests.log 2>&1
+          status=$?
+          grep -E "^(test .*\.\.\. FAILED|failures:|---- .* stdout ----|thread '.*' panicked|test result:)" /tmp/openmls-runtime-tests.log || true
+          tail -n 260 /tmp/openmls-runtime-tests.log
+          exit $status
+      - name: Upload runtime test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: openmls-runtime-test-log
+          path: /tmp/openmls-runtime-tests.log
+          if-no-files-found: error
