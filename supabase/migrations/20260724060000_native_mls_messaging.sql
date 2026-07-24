@@ -63,6 +63,56 @@ REVOKE ALL ON FUNCTION public.get_mls_device_identity(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.get_mls_device_identity(uuid) TO authenticated;
 
 
+CREATE OR REPLACE FUNCTION public.list_mls_recipient_devices(target_user uuid)
+RETURNS TABLE (
+  device_id uuid,
+  user_id uuid,
+  device_public_id text,
+  public_ed25519_key_hex text
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  caller uuid := auth.uid();
+BEGIN
+  IF caller IS NULL THEN
+    RAISE EXCEPTION 'authentication required';
+  END IF;
+
+  IF target_user <> caller AND NOT EXISTS (
+    SELECT 1
+      FROM public.conversation_members mine
+      JOIN public.conversation_members theirs
+        ON theirs.conversation_id = mine.conversation_id
+     WHERE mine.user_id = caller
+       AND mine.left_at IS NULL
+       AND theirs.user_id = target_user
+       AND theirs.left_at IS NULL
+  ) THEN
+    RAISE EXCEPTION 'recipient device discovery not authorized';
+  END IF;
+
+  RETURN QUERY
+    SELECT d.id,
+           d.user_id,
+           d.device_public_id,
+           encode(d.public_ed25519_key, 'hex')
+      FROM public.devices d
+     WHERE d.user_id = target_user
+       AND d.status = 'active'
+       AND d.revoked_at IS NULL
+       AND d.key_algorithm = 'mls-openmls-v1'
+       AND d.public_ed25519_key IS NOT NULL
+     ORDER BY d.registered_at ASC;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.list_mls_recipient_devices(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.list_mls_recipient_devices(uuid) TO authenticated;
+
+
 CREATE OR REPLACE FUNCTION public.send_mls_message(
   p_message_id uuid,
   p_conversation_id uuid,
@@ -159,7 +209,6 @@ BEGIN
       RAISE EXCEPTION 'encrypted envelope routing/protocol binding mismatch';
     END IF;
 
-    -- Bound server-side storage against pathological IPC/relay payloads.
     IF octet_length(envelope::text) > 24 * 1024 * 1024 THEN
       RAISE EXCEPTION 'encrypted envelope too large';
     END IF;
@@ -264,6 +313,7 @@ BEGIN
      WHERE e.recipient_device_id = p_device_id
        AND e.recipient_user_id = caller
        AND e.ciphertext_algorithm = 'whispr-mls-v1'
+       AND e.delivered_at IS NULL
        AND m.deleted_at IS NULL
      ORDER BY e.created_at ASC
      LIMIT bounded_limit;
