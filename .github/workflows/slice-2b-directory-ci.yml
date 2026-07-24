@@ -43,8 +43,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Minimal shims for auth.uid() / auth.users so migrations that assume
-      # Supabase's `auth` schema apply cleanly against vanilla Postgres.
       - name: Bootstrap auth shim
         run: |
           psql -v ON_ERROR_STOP=1 <<'SQL'
@@ -63,7 +61,6 @@ jobs:
           CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
             LANGUAGE sql STABLE AS
           $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-          -- Roles the migrations grant to.
           DO $do$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
               CREATE ROLE authenticated;
@@ -77,19 +74,36 @@ jobs:
           END $do$;
           SQL
 
-      # Apply every migration in filename order. A failure here means the
-      # migration itself is broken against a plain Postgres environment.
       - name: Apply migrations
+        id: migrations
+        shell: bash
         run: |
-          set -euo pipefail
+          set +e
+          : > /tmp/migrations.log
           for f in $(ls supabase/migrations/*.sql | sort); do
-            echo "==> applying $f"
-            psql -v ON_ERROR_STOP=1 -f "$f"
+            echo "==> applying $f" | tee -a /tmp/migrations.log
+            psql -v ON_ERROR_STOP=1 -f "$f" >> /tmp/migrations.log 2>&1
+            status=$?
+            if [ $status -ne 0 ]; then
+              echo "FAILED: $f" | tee -a /tmp/migrations.log
+              tail -n 160 /tmp/migrations.log
+              exit $status
+            fi
           done
+          tail -n 80 /tmp/migrations.log
 
       - name: Run Slice 2B directory tests
+        if: success()
         run: |
           psql -v ON_ERROR_STOP=1 -f supabase/tests/slice_2b_directory.sql
+
+      - name: Upload migration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slice-2b-migration-diagnostics
+          path: /tmp/migrations.log
+          if-no-files-found: warn
 
   substitution-detection:
     name: Client-side substitution detection (vitest)
