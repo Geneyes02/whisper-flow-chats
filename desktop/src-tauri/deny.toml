@@ -19,9 +19,10 @@
 
 [graph]
 all-features = false
-# Evaluate the openmls feature so this policy covers the graph the
-# openmls-baseline CI job actually resolves.
-features = ["openmls"]
+# Evaluate the exact feature used by the crypto-host production candidate.
+# The optional dependency itself is declared with `dep:openmls`, so there is
+# intentionally no implicit `openmls` feature on whispr-crypto-host.
+features = ["backend-openmls"]
 
 [advisories]
 version = 2
