@@ -1,0 +1,20 @@
+name: trigger native chat integration patch
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/trigger-native-chat-integration.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch one-shot patch workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run apply-native-chat-integration.yml --repo "${{ github.repository }}" --ref whispr/e2ee-phase-b
