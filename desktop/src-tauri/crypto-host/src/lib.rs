@@ -19,29 +19,29 @@
 //!   Backend-specific error internals are erased before crossing the
 //!   boundary. Fail-closed: unknown errors become `Unsupported`.
 //!
-//! ## Why the seam matters
+//! ## Data map
 //!
-//! libsignal-protocol is AGPL-3.0. Whispr's licensing posture for that
-//! dependency is unresolved (see `docs/ADR-LIBSIGNAL-LICENSING.md`). By
-//! keeping libsignal isolated behind a Cargo feature inside a dedicated
-//! crate, we can:
+//! See `docs/DATA_MAP.md` for the authoritative list of what is stored
+//! where (OS keychain, in-memory only, Whispr Cloud, local encrypted state).
 //!
-//!   * ship CI + native builds today with the stub backend,
-//!   * swap in libsignal (or any alternative — MLS-only, Olm, a proprietary
-//!     licensed build) without touching UI or messaging code,
-//!   * keep the AGPL surface auditable to a single crate.
+//! ## Conformance
+//!
+//! Every backend (stub, libsignal, MLS, …) MUST pass the backend-agnostic
+//! conformance suite defined in [`conformance`]. Whispr will not use a
+//! backend that fails the suite.
 
 #![deny(unsafe_code)]
 #![warn(missing_docs)]
 
 pub mod api;
 pub mod backend;
+pub mod conformance;
 pub mod error;
 pub mod keychain;
 pub mod storage;
 pub mod types;
 
-pub use api::CryptoHost;
+pub use api::{BackendInfo, CryptoHost, HostStatus, LockState, ProvisioningState};
 pub use error::{CryptoError, CryptoErrorCode};
 pub use types::*;
 

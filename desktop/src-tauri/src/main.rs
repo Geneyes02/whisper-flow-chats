@@ -16,14 +16,25 @@ fn main() {
     tauri::Builder::default()
         .manage(HostState(host))
         .invoke_handler(tauri::generate_handler![
+            // lifecycle
+            commands::whispr_crypto_status,
+            commands::whispr_crypto_backend_info,
+            commands::whispr_crypto_initialize,
+            commands::whispr_crypto_lock,
+            commands::whispr_crypto_unlock,
+            commands::whispr_crypto_logout,
+            commands::whispr_crypto_wipe,
+            // identity + prekeys
             commands::whispr_crypto_create_identity,
             commands::whispr_crypto_load_identity,
             commands::whispr_crypto_publish_prekeys,
+            // sessions
             commands::whispr_crypto_establish_session,
+            commands::whispr_crypto_rotate_session,
+            // messaging
             commands::whispr_crypto_encrypt,
             commands::whispr_crypto_decrypt,
             commands::whispr_crypto_safety_number,
-            commands::whispr_crypto_rotate_session,
             commands::whispr_crypto_revoke_device,
         ])
         .run(tauri::generate_context!())
