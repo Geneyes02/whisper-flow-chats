@@ -1,0 +1,41 @@
+// desktop/src-tauri/src/crypto.rs (planned Phase A stub — not yet wired)
+//
+// This is the command surface the LibsignalBridgeProvider will call into.
+// It is written as a spec, not built yet, so the phase boundaries are
+// explicit. The actual implementation lands with Phase A (device identity,
+// prekey publishing, session persistence) and Phase B (session establish +
+// encrypt/decrypt + ratcheting).
+//
+// SECURITY INVARIANTS
+// - Private keys live in libsignal-owned stores backed by OS keychains
+//   (macOS Keychain, Windows DPAPI, Linux SecretService).
+// - Only public material (identity pubkey, prekey bundles, ciphertext,
+//   opaque session handles, safety-number digits) crosses the Tauri IPC
+//   boundary into the WebView.
+// - No `println!` / `log::` of plaintext, keys, or decrypted payloads.
+// - Every command returns a BridgeError with a code that maps 1:1 to
+//   Whispr's CryptoError codes (no_identity, no_session, bad_ciphertext,
+//   identity_mismatch, unsupported, storage_locked, invalid_bundle).
+//
+// Dependencies to add to desktop/src-tauri/Cargo.toml (Phase A):
+//   libsignal-protocol   = "0.60"   # AGPL-3.0 — see docs/ARCHITECTURE.md
+//   keyring              = "3"      # cross-platform OS keychain
+//   serde                = { version = "1", features = ["derive"] }
+//   tokio                = { version = "1", features = ["sync"] }
+//   thiserror            = "2"
+//
+// Command surface (matches src/lib/crypto/libsignal-bridge.ts):
+//
+//   whispr_crypto_create_identity()       -> DeviceIdentity
+//   whispr_crypto_load_identity()         -> Option<DeviceIdentity>
+//   whispr_crypto_publish_prekeys(count)  -> PrekeyBundle
+//   whispr_crypto_establish_session(b)    -> ()
+//   whispr_crypto_encrypt(peer, pt, aad)  -> Envelope
+//   whispr_crypto_decrypt(envelope)       -> Vec<u8>
+//   whispr_crypto_rotate_session(peer)    -> ()
+//   whispr_crypto_safety_number(peer_pk)  -> SafetyNumber
+//   whispr_crypto_revoke_device()         -> ()
+//
+// Tauri allowlist (tauri.conf.json) must restrict `invoke` to exactly the
+// `whispr_crypto_*` commands. No shell, no fs, no arbitrary command
+// invocation from the WebView.
