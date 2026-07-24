@@ -101,18 +101,23 @@ export interface CryptoProvider {
   revokeDevice(): Promise<void>;
 }
 
+export type CryptoErrorCode =
+  | 'no_identity'
+  | 'no_session'
+  | 'bad_ciphertext'
+  | 'identity_mismatch'
+  | 'unsupported'
+  | 'storage_locked'
+  | 'storage_corrupt'
+  | 'device_revoked'
+  | 'invalid_bundle'
+  | 'internal';
+
 /** Thrown on any authentication/decryption/provider failure. Never swallowed. */
 export class CryptoError extends Error {
   constructor(
     message: string,
-    public readonly code:
-      | 'no_identity'
-      | 'no_session'
-      | 'bad_ciphertext'
-      | 'identity_mismatch'
-      | 'unsupported'
-      | 'storage_locked'
-      | 'invalid_bundle',
+    public readonly code: CryptoErrorCode,
   ) {
     super(message);
     this.name = 'CryptoError';
