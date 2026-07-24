@@ -66,11 +66,11 @@ function Nav() {
 
         <nav className="hidden items-center gap-1 md:flex">
           {[
-            ["Product", "#features"],
+            ["Features", "#features"],
             ["Security", "#security"],
+            ["Compare", "#comparison"],
             ["Pricing", "#pricing"],
-            ["Developers", "#developers"],
-            ["Company", "#company"],
+            ["FAQ", "#faq"],
           ].map(([label, href]) => (
             <a
               key={label}
@@ -81,6 +81,7 @@ function Nav() {
             </a>
           ))}
         </nav>
+
 
         <div className="flex items-center gap-2">
           <Link
@@ -658,10 +659,11 @@ function SecuritySection() {
             <p className="mt-4 max-w-lg text-lg text-muted-foreground">
               Whispr is designed so that privacy isn't a marketing checkbox — it's a property of the system.
             </p>
-            <a href="#" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-electric hover:underline">
+            <a href="#faq" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-electric hover:underline">
               Read the security overview
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
             </a>
+
           </div>
 
           <ul className="space-y-3">
@@ -746,7 +748,8 @@ function Comparison() {
   ] as const;
 
   return (
-    <section className="py-28">
+    <section id="comparison" className="py-28">
+
       <div className="mx-auto max-w-5xl px-6">
         <SectionEyebrow>How we compare</SectionEyebrow>
         <h2 className="mt-3 text-balance text-4xl font-semibold tracking-[-0.02em]">
@@ -858,15 +861,31 @@ function Pricing() {
                   </li>
                 ))}
               </ul>
-              <button
-                className={`mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium transition-transform active:scale-[0.98] ${
-                  t.featured
-                    ? "bg-electric text-electric-foreground hover:brightness-110"
-                    : "border border-border bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
-                }`}
-              >
-                {t.cta}
-              </button>
+              {t.cta === "Contact sales" ? (
+                <a
+                  href="mailto:sales@whispr.app?subject=Whispr%20Enterprise"
+                  className={`mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium transition-transform active:scale-[0.98] ${
+                    t.featured
+                      ? "bg-electric text-electric-foreground hover:brightness-110"
+                      : "border border-border bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+                  }`}
+                >
+                  {t.cta}
+                </a>
+              ) : (
+                <Link
+                  to="/auth"
+                  search={{ mode: "signup" }}
+                  className={`mt-6 inline-flex w-full items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium transition-transform active:scale-[0.98] ${
+                    t.featured
+                      ? "bg-electric text-electric-foreground hover:brightness-110"
+                      : "border border-border bg-white/[0.03] text-foreground hover:bg-white/[0.06]"
+                  }`}
+                >
+                  {t.cta}
+                </Link>
+              )}
+
             </div>
           ))}
         </div>
@@ -952,13 +971,18 @@ function CTA() {
               Free forever for individuals. Available on every device you own.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <a href="#" className="inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-medium text-background transition-transform active:scale-[0.98]">
-                Download for Mac
-              </a>
-              <a href="#" className="inline-flex items-center gap-2 rounded-full border border-border bg-white/[0.03] px-5 py-3 text-sm font-medium text-foreground transition-colors hover:bg-white/[0.06]">
+              <Link
+                to="/auth"
+                search={{ mode: "signup" }}
+                className="inline-flex items-center gap-2 rounded-full bg-foreground px-5 py-3 text-sm font-medium text-background transition-transform active:scale-[0.98]"
+              >
+                Create your account
+              </Link>
+              <a href="#download" className="inline-flex items-center gap-2 rounded-full border border-border bg-white/[0.03] px-5 py-3 text-sm font-medium text-foreground transition-colors hover:bg-white/[0.06]">
                 All platforms
               </a>
             </div>
+
           </div>
         </div>
       </div>
@@ -969,21 +993,52 @@ function CTA() {
 /* ---------------------------- FOOTER ---------------------------- */
 
 function Footer() {
-  const cols = [
-    { title: "Product", links: ["Features", "Security", "Download", "Web", "Enterprise", "What's new"] },
-    { title: "Developers", links: ["API", "Open source", "Bug bounty", "Status", "Changelog"] },
-    { title: "Company", links: ["About", "Blog", "Careers", "Press", "Contact"] },
-    { title: "Legal", links: ["Privacy", "Terms", "Cookies", "Trust center"] },
+  const cols: { title: string; links: { label: string; href: string; external?: boolean }[] }[] = [
+    {
+      title: "Product",
+      links: [
+        { label: "Features", href: "#features" },
+        { label: "Security", href: "#security" },
+        { label: "Download", href: "#download" },
+        { label: "Compare", href: "#comparison" },
+        { label: "Pricing", href: "#pricing" },
+      ],
+    },
+    {
+      title: "Developers",
+      links: [
+        { label: "Status", href: "#download" },
+        { label: "Changelog", href: "#faq" },
+        { label: "Bug bounty", href: "mailto:security@whispr.app?subject=Bug%20bounty", external: true },
+      ],
+    },
+    {
+      title: "Company",
+      links: [
+        { label: "About", href: "#security" },
+        { label: "Pricing", href: "#pricing" },
+        { label: "Contact", href: "mailto:hello@whispr.app", external: true },
+      ],
+    },
+    {
+      title: "Legal",
+      links: [
+        { label: "Privacy", href: "#security" },
+        { label: "Terms", href: "#faq" },
+        { label: "Trust center", href: "#security" },
+      ],
+    },
   ];
+  const scrollTop = () => window.scrollTo({ top: 0, behavior: "smooth" });
   return (
     <footer className="border-t border-border/60 bg-surface/40 py-16">
       <div className="mx-auto max-w-6xl px-6">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-6">
           <div className="col-span-2">
-            <div className="flex items-center gap-2">
+            <button onClick={scrollTop} className="flex items-center gap-2 text-left">
               <Logo />
               <span className="font-semibold tracking-tight">Whispr</span>
-            </div>
+            </button>
             <p className="mt-3 max-w-xs text-sm text-muted-foreground">
               A privacy-first communication platform for messages, calls, and communities.
             </p>
@@ -993,8 +1048,14 @@ function Footer() {
               <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{c.title}</div>
               <ul className="mt-3 space-y-2">
                 {c.links.map((l) => (
-                  <li key={l}>
-                    <a href="#" className="text-sm text-foreground/80 transition-colors hover:text-foreground">{l}</a>
+                  <li key={l.label}>
+                    <a
+                      href={l.href}
+                      {...(l.external ? { rel: "noopener noreferrer" } : {})}
+                      className="text-sm text-foreground/80 transition-colors hover:text-foreground"
+                    >
+                      {l.label}
+                    </a>
                   </li>
                 ))}
               </ul>
@@ -1005,15 +1066,19 @@ function Footer() {
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-border/60 pt-6 sm:flex-row sm:items-center">
           <div className="text-xs text-muted-foreground">© {new Date().getFullYear()} Whispr, Inc. All rights reserved.</div>
           <div className="flex items-center gap-4 text-muted-foreground">
-            <a href="#" aria-label="Twitter" className="hover:text-foreground"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18 3h3l-7.5 8.6L22 21h-6.8l-5.3-6.9L3.8 21H1l8-9.2L1 3h7l4.8 6.3L18 3Zm-1.2 16h1.9L7.3 5H5.3l11.5 14Z"/></svg></a>
-            <a href="#" aria-label="GitHub" className="hover:text-foreground"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5A11.5 11.5 0 0 0 .5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.2-3.2-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.9 1.2 2 1.2 3.2 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"/></svg></a>
-            <a href="#" aria-label="Mastodon" className="hover:text-foreground"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21.6 8.5c0-4.5-3-5.8-3-5.8C17.1 2 14.7 1.7 12 1.7h-.1c-2.7 0-5 .3-6.5 1-.1 0-3 1.3-3 5.8v3.5c0 4.5 2.9 4.6 5.4 4.6.9 0 1.4-.1 1.4-.1v-2s-.6.2-1.4.2c-2 0-2.6-.9-2.6-2.4V8.6c0-1.3.9-1.8 1.7-1.8.9 0 1.7.6 1.7 1.7v3.8h2V8.5c0-1.1.8-1.7 1.7-1.7.8 0 1.7.5 1.7 1.8V12h2V8.5c0-2.6-1.7-3.1-2.7-3.1-1.1 0-2 .5-2.4 1.2-.5-.7-1.3-1.2-2.4-1.2-1 0-2.7.5-2.7 3.1v3.8H4v-3.8c0-2.6 1.5-4.3 4.3-4.3 1.5 0 2.7.6 3.4 1.5.7-.9 1.9-1.5 3.4-1.5 2.8 0 4.3 1.7 4.3 4.3v3.9c0 3-2.2 4-4.4 4.2-2.4.2-4.7.1-4.7.1v1.4c0 .5.3.9.9 1 1.2.2 3.7.5 6.5-.4 3.4-1.1 4-4.4 4-7v-3.6Z"/></svg></a>
+            <button onClick={scrollTop} aria-label="Back to top" className="hover:text-foreground">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+            </button>
+            <a href="mailto:hello@whispr.app" aria-label="Email us" className="hover:text-foreground">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/></svg>
+            </a>
           </div>
         </div>
       </div>
     </footer>
   );
 }
+
 
 function SectionEyebrow({ children }: { children: React.ReactNode }) {
   return (
