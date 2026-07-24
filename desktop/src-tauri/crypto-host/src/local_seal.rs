@@ -60,9 +60,16 @@ pub fn seal(store: &dyn SecureStore, plaintext: &[u8], aad: &[u8]) -> Result<Str
         .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "local seal key"))?;
     let mut nonce_bytes = [0u8; NONCE_LEN];
     OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
+    let nonce = Nonce::try_from(&nonce_bytes[..])
+        .map_err(|_| CryptoError::new(CryptoErrorCode::Internal, "local seal nonce length"))?;
     let ciphertext = cipher
-        .encrypt(nonce, Payload { msg: plaintext, aad })
+        .encrypt(
+            &nonce,
+            Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
         .map_err(|_| CryptoError::internal("local seal encrypt"))?;
 
     let mut blob = Vec::with_capacity(1 + NONCE_LEN + ciphertext.len());
@@ -95,10 +102,12 @@ pub fn open(store: &dyn SecureStore, blob_b64: &str, aad: &[u8]) -> Result<Vec<u
     let key = load_or_create_key(store)?;
     let cipher = Aes256Gcm::new_from_slice(&key)
         .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "local seal key"))?;
-    let nonce = Nonce::from_slice(&blob[1..1 + NONCE_LEN]);
+    let nonce = Nonce::try_from(&blob[1..1 + NONCE_LEN]).map_err(|_| {
+        CryptoError::new(CryptoErrorCode::BadCiphertext, "local sealed nonce length")
+    })?;
     cipher
         .decrypt(
-            nonce,
+            &nonce,
             Payload {
                 msg: &blob[1 + NONCE_LEN..],
                 aad,

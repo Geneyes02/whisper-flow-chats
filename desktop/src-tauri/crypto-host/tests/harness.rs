@@ -66,6 +66,7 @@ fn prekey_bundle_contains_only_public_material() {
     );
 }
 
+#[cfg(feature = "backend-stub")]
 #[test]
 fn stub_backend_refuses_to_encrypt() {
     let h = host();
@@ -74,6 +75,7 @@ fn stub_backend_refuses_to_encrypt() {
     assert_eq!(err.code, CryptoErrorCode::Unsupported);
 }
 
+#[cfg(feature = "backend-stub")]
 #[test]
 fn stub_backend_refuses_to_establish_session() {
     let h = host();
@@ -364,6 +366,7 @@ fn concurrent_publish_prekeys_does_not_deadlock() {
 // Backend conformance
 // ---------------------------------------------------------------------
 
+#[cfg(feature = "backend-stub")]
 #[test]
 fn stub_backend_passes_host_invariants() {
     let report = run_host_invariants(Capability::NonMessaging);
@@ -374,6 +377,21 @@ fn stub_backend_passes_host_invariants() {
             }
         }
         panic!("stub backend failed host invariant conformance");
+    }
+    assert!(!report.backend.is_empty());
+}
+
+#[cfg(feature = "backend-openmls")]
+#[test]
+fn openmls_backend_passes_host_invariants() {
+    let report = run_host_invariants(Capability::Messaging);
+    if !report.all_passed() {
+        for c in &report.checks {
+            if !c.passed {
+                eprintln!("FAIL {}: {} — {:?}", c.id, c.description, c.detail);
+            }
+        }
+        panic!("OpenMLS backend failed host invariant conformance");
     }
     assert!(!report.backend.is_empty());
 }

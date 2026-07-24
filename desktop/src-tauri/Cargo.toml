@@ -35,7 +35,10 @@ libsignal = ["whispr-crypto-host/backend-libsignal"]
 openmls = ["whispr-crypto-host/backend-openmls"]
 
 [profile.release]
-panic = "abort"
+# OpenMLS 0.8.1 contains private-message paths that can panic on hostile
+# authentication failures. Whispr contains those panics at the crypto-host
+# boundary, which requires unwind semantics in production builds.
+panic = "unwind"
 codegen-units = 1
 lto = true
 opt-level = "s"

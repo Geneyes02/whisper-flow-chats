@@ -341,11 +341,30 @@ impl OpenMlsRuntimeBackend {
         let protocol = message.try_into_protocol_message().map_err(|_| {
             CryptoError::new(CryptoErrorCode::BadCiphertext, "control message type")
         })?;
-        let processed = group
-            .process_message(&self.provider, protocol)
-            .map_err(|_| {
-                CryptoError::new(CryptoErrorCode::BadCiphertext, "control message validation")
-            })?;
+        // OpenMLS 0.8.1 can panic internally when hostile ciphertext reaches
+        // private-message decryption. Treat every inbound packet as attacker
+        // controlled and contain that panic at Whispr's protocol boundary.
+        let processed = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            group.process_message(&self.provider, protocol)
+        })) {
+            Ok(Ok(processed)) => processed,
+            Ok(Err(_)) => {
+                return Err(CryptoError::new(
+                    CryptoErrorCode::BadCiphertext,
+                    "control message validation",
+                ))
+            }
+            Err(_) => {
+                // Discard any in-memory provider mutation that may have happened
+                // before the upstream panic. The last atomic snapshot is the
+                // authoritative state and is restored fail-closed.
+                self.restore_runtime()?;
+                return Err(CryptoError::new(
+                    CryptoErrorCode::BadCiphertext,
+                    "control message authentication",
+                ));
+            }
+        };
         match processed.into_content() {
             ProcessedMessageContent::StagedCommitMessage(staged_commit) => group
                 .merge_staged_commit(&self.provider, *staged_commit)
@@ -464,14 +483,13 @@ impl CryptoBackend for OpenMlsRuntimeBackend {
 
     fn publish_prekeys(&self, count: u32) -> Result<PrekeyBundle> {
         let _lock = self.mutation_lock.lock();
+        let id = self.require_identity()?;
         if count == 0 || count > MAX_PREKEYS {
             return Err(CryptoError::new(
                 CryptoErrorCode::InvalidBundle,
                 "prekey count",
             ));
         }
-
-        let id = self.require_identity()?;
         let signer = self.signer(&id)?;
         let credential_with_key = self.credential_with_key(&id)?;
         let mut one_time_prekeys = Vec::with_capacity(count as usize);
@@ -707,11 +725,27 @@ impl CryptoBackend for OpenMlsRuntimeBackend {
         let protocol = message
             .try_into_protocol_message()
             .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "application type"))?;
-        let processed = group
-            .process_message(&self.provider, protocol)
-            .map_err(|_| {
-                CryptoError::new(CryptoErrorCode::BadCiphertext, "application validation")
-            })?;
+        // Contain upstream OpenMLS panics caused by malformed/authentication-
+        // failing private messages. A network peer must never be able to crash
+        // the native Whispr process with ciphertext alone.
+        let processed = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            group.process_message(&self.provider, protocol)
+        })) {
+            Ok(Ok(processed)) => processed,
+            Ok(Err(_)) => {
+                return Err(CryptoError::new(
+                    CryptoErrorCode::BadCiphertext,
+                    "application validation",
+                ))
+            }
+            Err(_) => {
+                self.restore_runtime()?;
+                return Err(CryptoError::new(
+                    CryptoErrorCode::BadCiphertext,
+                    "application authentication",
+                ));
+            }
+        };
 
         let envelope_aad = decode_b64(&envelope.aad)
             .map_err(|_| CryptoError::new(CryptoErrorCode::BadCiphertext, "aad encoding"))?;
