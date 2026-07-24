@@ -98,8 +98,9 @@ function PrivacyDashboardPage() {
               title="Private account details"
               desc="Only you and Whispr operators (under strict audit) can see this."
             >
-              <KV k="Email" v={data.privateAccount?.email ?? "—"} />
-              <KV k="Phone" v={data.privateAccount?.phone_e164 ?? "—"} />
+              <KV k="Recovery email" v={data.privateAccount?.recovery_email ?? "—"} />
+              <KV k="Phone" v={data.privateAccount?.phone_number ?? "—"} />
+
             </Section>
 
             <Section
@@ -111,7 +112,7 @@ function PrivacyDashboardPage() {
                 <Row
                   key={d.id}
                   title={d.name ?? d.platform ?? "Unknown device"}
-                  subtitle={`Last seen ${d.last_seen_at ? fmtRel(d.last_seen_at) : "never"}`}
+                  subtitle={`Last active ${d.last_active_at ? fmtRel(d.last_active_at) : "never"}`}
                   action={
                     <button
                       onClick={() => revokeDeviceMut.mutate(d.id)}

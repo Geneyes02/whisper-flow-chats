@@ -31,12 +31,12 @@ export const getPrivacySnapshot = createServerFn({ method: "GET" })
         .maybeSingle(),
       supabase
         .from("account_private")
-        .select("user_id, email, phone_e164, created_at")
+        .select("user_id, recovery_email, phone_number, status, created_at, privacy_preferences")
         .eq("user_id", userId)
         .maybeSingle(),
       supabase
         .from("devices")
-        .select("id, name, platform, status, created_at, last_seen_at")
+        .select("id, name, platform, status, created_at, last_active_at")
         .eq("user_id", userId)
         .is("revoked_at", null),
       supabase
@@ -51,19 +51,20 @@ export const getPrivacySnapshot = createServerFn({ method: "GET" })
       supabase
         .from("messages")
         .select("*", { count: "exact", head: true })
-        .eq("sender_user_id", userId),
+        .eq("sender_id", userId),
       supabase
         .from("contacts")
         .select("*", { count: "exact", head: true })
-        .eq("owner_user_id", userId),
+        .eq("owner_id", userId),
       supabase
         .from("blocks")
         .select("*", { count: "exact", head: true })
-        .eq("blocker_user_id", userId),
+        .eq("blocker_id", userId),
       supabase
         .from("usernames")
-        .select("username, claimed_at")
-        .eq("user_id", userId),
+        .select("username, reserved_at, released_at")
+        .eq("user_id", userId)
+        .is("released_at", null),
     ]);
 
     return {
@@ -85,12 +86,19 @@ export const requestAccountDeletion = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
-    // Record a deletion request. The account_private table already stores the
-    // request timestamp; an out-of-band operator process reviews and completes
-    // deletion. This keeps deletion auditable and prevents accidental data loss.
+    // Record the deletion request inside the privacy_preferences JSON so it's
+    // auditable without needing a schema change. An operator process reviews and
+    // completes deletion out of band — kept out of the app to prevent accidents.
+    const { data: current } = await supabase
+      .from("account_private")
+      .select("privacy_preferences")
+      .eq("user_id", userId)
+      .maybeSingle();
+    const prefs = (current?.privacy_preferences as Record<string, unknown> | null) ?? {};
+    const updated = { ...prefs, deletion_requested_at: new Date().toISOString() };
     const { error } = await supabase
       .from("account_private")
-      .update({ deletion_requested_at: new Date().toISOString() })
+      .update({ privacy_preferences: updated })
       .eq("user_id", userId);
     if (error) throw error;
     return { ok: true as const };
