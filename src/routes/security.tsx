@@ -60,106 +60,140 @@ function SecurityPage() {
           <span className="h-2 w-2 rounded-full bg-yellow-400" />
           <span className="font-medium">Current status:</span>
           <span className="text-muted-foreground">
-            Encrypted in transit &amp; at rest. Client-side E2EE in staged rollout.
+            Native-first messenger. Web is not an E2EE surface.
           </span>
         </div>
 
-        {/* What we protect today */}
-        <Section title="What Whispr protects today">
+        {/* Platform matrix — the ONLY authoritative source */}
+        <Section title="Which platforms support end-to-end encryption today">
+          <p className="mb-6 text-muted-foreground">
+            Whispr is a native privacy messenger. The web app onboards, documents, and
+            administers your account — it is not the primary secure surface and does not
+            encrypt messages end-to-end. Real E2EE ships to the native clients, one phase
+            at a time, and only after the capability actually works.
+          </p>
+          <div className="overflow-hidden rounded-2xl border border-border">
+            <table className="w-full text-sm">
+              <thead className="bg-surface text-left">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Surface</th>
+                  <th className="px-4 py-3 font-medium">1:1 E2EE</th>
+                  <th className="px-4 py-3 font-medium">Groups (MLS)</th>
+                  <th className="px-4 py-3 font-medium">Calls</th>
+                  <th className="px-4 py-3 font-medium">Attachments</th>
+                </tr>
+              </thead>
+              <tbody className="[&_td]:border-t [&_td]:border-border [&_td]:px-4 [&_td]:py-3">
+                <tr>
+                  <td className="font-medium text-foreground">Web (this site)</td>
+                  <td>Not supported</td>
+                  <td>Not supported</td>
+                  <td>Not supported</td>
+                  <td>Not supported</td>
+                </tr>
+                <tr>
+                  <td className="font-medium text-foreground">macOS · Windows · Linux (Tauri)</td>
+                  <td>In development — Phase A/B</td>
+                  <td>Planned — Phase D</td>
+                  <td>Planned — Phase E</td>
+                  <td>Planned — Phase C</td>
+                </tr>
+                <tr>
+                  <td className="font-medium text-foreground">iOS · Android</td>
+                  <td>Planned after desktop</td>
+                  <td>Planned — Phase D</td>
+                  <td>Planned — Phase E</td>
+                  <td>Planned — Phase C</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-4 text-sm text-muted-foreground">
+            No cell is marked "supported" until it actually works on-device and passes
+            Whispr's adversarial test suite. This page is the only authoritative source —
+            marketing copy elsewhere is not.
+          </p>
+        </Section>
+
+        {/* Web surface honesty */}
+        <Section title="The web app is not an E2EE surface">
           <ul className="space-y-3 text-muted-foreground">
-            <Li>
-              <b className="text-foreground">TLS 1.3 in transit.</b> All client ↔ server traffic
-              is encrypted with modern TLS.
+            <Li kind="warn">
+              <b className="text-foreground">No client-side message encryption.</b> Any
+              conversation preview shown in the browser is encrypted in transit (TLS 1.3)
+              and at rest (infrastructure-level), but the server can technically read
+              message content. Do not use the browser for information that requires
+              server-blind confidentiality.
+            </Li>
+            <Li kind="warn">
+              <b className="text-foreground">No silent downgrade.</b> A conversation created
+              on a native Whispr client will not be continued in the browser as plaintext.
+              The web app shows an "Open in Whispr for macOS · Windows · iOS · Android"
+              state instead.
             </Li>
             <Li>
-              <b className="text-foreground">Encryption at rest.</b> Database and object storage
-              are encrypted at the infrastructure layer.
-            </Li>
-            <Li>
-              <b className="text-foreground">Row-level security.</b> Every table enforces
-              per-user access rules in the database — the app cannot bypass them.
-            </Li>
-            <Li>
-              <b className="text-foreground">Multi-device sessions.</b> Each device gets its own
-              session token, revocable independently from{" "}
-              <Link to="/app" className="text-electric underline-offset-4 hover:underline">
-                Settings
-              </Link>
-              .
-            </Li>
-            <Li>
-              <b className="text-foreground">Minimal metadata.</b> We store what's required to
-              deliver messages: sender, recipient, timestamp, ciphertext, delivery status. No
-              read logs. No behavioural profiling. Your{" "}
+              <b className="text-foreground">Web still handles.</b> Marketing, pricing,
+              this security page, your{" "}
               <Link to="/privacy-dashboard" className="text-electric underline-offset-4 hover:underline">
                 privacy dashboard
-              </Link>{" "}
-              lists every field.
+              </Link>
+              , account and{" "}
+              <Link to="/app" className="text-electric underline-offset-4 hover:underline">
+                device management
+              </Link>
+              ,{" "}
+              <Link to="/download" className="text-electric underline-offset-4 hover:underline">
+                download links
+              </Link>
+              , and community discovery (planned).
             </Li>
           </ul>
         </Section>
 
-        {/* What we do NOT yet protect */}
-        <Section title="What Whispr does NOT yet protect against">
-          <p className="mb-4 text-muted-foreground">
-            We're being explicit so you can make an informed choice:
-          </p>
-          <ul className="space-y-3 text-muted-foreground">
-            <Li kind="warn">
-              <b className="text-foreground">Server-side access to message content.</b> Until
-              client-side E2EE ships (see roadmap), a compromised server or a compelled operator
-              could read message contents. Do not use Whispr for information that requires
-              server-blind confidentiality yet.
-            </Li>
-            <Li kind="warn">
-              <b className="text-foreground">Forward secrecy.</b> Not applicable until E2EE is
-              live.
-            </Li>
-            <Li kind="warn">
-              <b className="text-foreground">Metadata resistance.</b> Delivery routing metadata
-              (who talks to whom, when) is visible to the server.
-            </Li>
-          </ul>
-        </Section>
-
-        {/* Roadmap */}
-        <Section title="Roadmap to full end-to-end encryption">
+        {/* Native roadmap */}
+        <Section title="Native client roadmap">
           <p className="mb-6 text-muted-foreground">
-            Whispr's target architecture uses the best-in-class primitive for each surface — no
-            single protocol handles everything, and none of these will be labelled "encrypted"
-            until they've been independently reviewed.
+            Whispr's target architecture uses the best-in-class primitive for each surface —
+            no single protocol handles everything. Each phase changes public claims only
+            when the capability actually ships and has passed adversarial review.
           </p>
           <ol className="space-y-4">
             <Roadmap
-              n="01"
-              title="1:1 chats — libsignal (X3DH + Double Ratchet)"
-              status="Planned — Phase 1"
-              body="Per-device Curve25519/Ed25519 identity keys. Prekey bundles published to the server. End-to-end encryption with forward secrecy and post-compromise recovery. Human-readable safety numbers for out-of-band device verification."
+              n="A"
+              title="Device identity & session foundation"
+              status="In development — desktop first"
+              body="Tauri runtime detection, native secure key storage (macOS Keychain, Windows DPAPI, Linux SecretService), libsignal Rust bridge, device provisioning, prekey publishing, session persistence."
             />
             <Roadmap
-              n="02"
+              n="B"
+              title="Real 1:1 encrypted messaging — libsignal (X3DH + Double Ratchet)"
+              status="Planned — after Phase A"
+              body="Real ratcheted 1:1 exchange with forward secrecy and post-compromise recovery. Offline first-contact delivery, multi-device sessions, identity-change warnings, out-of-band safety-number verification, device revocation."
+            />
+            <Roadmap
+              n="C"
+              title="Client-side encrypted attachments"
+              status="Planned"
+              body="Files are encrypted on-device before hitting object storage. Encrypted media metadata. Secure local media cache. Server sees only ciphertext blobs and routing metadata."
+            />
+            <Roadmap
+              n="D"
               title="Group chats — MLS (RFC 9420)"
-              status="Planned — Phase 2"
-              body="Standardised group key agreement that scales to large rooms with proper forward secrecy — instead of ad-hoc shared group keys or naive sender-key designs."
+              status="Planned"
+              body="Standardised group key agreement that scales to large rooms with proper forward secrecy — not ad-hoc shared group keys."
             />
             <Roadmap
-              n="03"
-              title="Voice & video — WebRTC with SFrame"
-              status="Planned — Phase 3"
+              n="E"
+              title="Voice & video — WebRTC with client-side SFrame"
+              status="Planned"
               body="Insertable Streams + SFrame end-to-end media encryption. SFU / TURN servers route packets but never receive media decryption keys."
-            />
-            <Roadmap
-              n="04"
-              title="Attachments — client-side encryption before upload"
-              status="Planned — Phase 4"
-              body="Files are encrypted on-device before hitting object storage; the server only ever sees ciphertext blobs and routing metadata."
             />
           </ol>
           <p className="mt-6 rounded-2xl border border-border bg-surface p-5 text-sm text-muted-foreground">
-            <b className="text-foreground">No silent downgrade.</b> Once a surface ships with
-            E2EE enabled, it will refuse to fall back to transport-only encryption. If a peer's
-            keys can't be resolved, the message doesn't send — we don't quietly weaken security
-            to preserve the UX.
+            <b className="text-foreground">Fail closed.</b> Once a native surface ships with
+            E2EE enabled, it refuses to fall back to transport-only encryption. If a peer's
+            keys can't be resolved, the message doesn't send. Identity changes surface a
+            high-priority security state before the new identity is treated as trusted.
           </p>
         </Section>
 
