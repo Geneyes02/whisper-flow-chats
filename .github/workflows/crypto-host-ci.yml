@@ -166,6 +166,24 @@ jobs:
           status=$?
           tail -n 120 /tmp/check.log
           exit $status
+      - name: strict clippy diagnostic (stub)
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          cargo clippy --no-default-features --features backend-stub --all-targets -- -D warnings > /tmp/clippy-stub.log 2>&1
+          status=$?
+          tail -n 120 /tmp/clippy-stub.log
+          exit $status
+      - name: strict clippy diagnostic (openmls)
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          cargo clippy --no-default-features --features backend-openmls --all-targets -- -D warnings > /tmp/clippy-openmls.log 2>&1
+          status=$?
+          tail -n 160 /tmp/clippy-openmls.log
+          exit $status
       - name: Upload diagnostic logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -174,4 +192,6 @@ jobs:
           path: |
             /tmp/fmt.log
             /tmp/check.log
+            /tmp/clippy-stub.log
+            /tmp/clippy-openmls.log
           if-no-files-found: warn
