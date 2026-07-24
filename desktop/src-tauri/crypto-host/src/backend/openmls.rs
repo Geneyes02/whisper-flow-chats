@@ -232,6 +232,219 @@ impl OpenMlsBackend {
         Credential::tls_deserialize(&mut bytes.as_slice())
             .map_err(|_| CryptoError::new(CryptoErrorCode::StorageCorrupt, "credential tls"))
     }
+
+    // ================================================================
+    // Slice 2 — KeyPackage lifecycle
+    // ================================================================
+    //
+    // Slice 1 published KeyPackages. Slice 2 governs their entire
+    // lifetime on the local device: replenishment, one-time consumption,
+    // reuse/replay prevention, expiry/device-binding validation of a
+    // peer's KeyPackage, and secure deletion of consumed private state.
+    //
+    // NONE of these methods do MLS group creation or Welcome processing;
+    // that is Slice 3. Passing a peer's KeyPackage here still returns
+    // `Unsupported` from `establish_session`.
+
+    /// Load the persisted KeyPackage pool. Returns an empty (but
+    /// ciphersuite-tagged) pool when nothing has been published yet, so
+    /// consume/replenish don't have to special-case first use.
+    fn load_keypackages(&self) -> Result<PersistedKeyPackages> {
+        match Snapshot::load(&*self.store, Slot::PrekeyStore, OPENMLS_BACKEND)? {
+            Some(snap) => {
+                let p: PersistedKeyPackages =
+                    serde_json::from_str(&snap.payload).map_err(|_| {
+                        CryptoError::new(CryptoErrorCode::StorageCorrupt, "keypackages payload")
+                    })?;
+                if p.ciphersuite_tag != WHISPR_CIPHERSUITE_TAG {
+                    return Err(CryptoError::new(
+                        CryptoErrorCode::StorageCorrupt,
+                        "keypackages ciphersuite mismatch",
+                    ));
+                }
+                Ok(p)
+            }
+            None => Ok(PersistedKeyPackages {
+                ciphersuite_tag: WHISPR_CIPHERSUITE_TAG.to_string(),
+                bundles_tls_b64: Vec::new(),
+                consumed_hashes_hex: Vec::new(),
+            }),
+        }
+    }
+
+    /// Build one fresh KeyPackage + private bundle for the given
+    /// identity. Extracted so `publish_prekeys` (Slice 1) and
+    /// `replenish_keypackages` (Slice 2) go through the same code path.
+    fn build_one_bundle(
+        &self,
+        signer: &SignatureKeyPair,
+        credential_with_key: &CredentialWithKey,
+    ) -> Result<(String /* public wire b64 */, String /* private bundle b64 */)> {
+        let bundle: KeyPackageBundle = KeyPackage::builder()
+            .key_package_lifetime(Lifetime::new(KEYPACKAGE_LIFETIME_SECS))
+            .build(
+                WHISPR_CIPHERSUITE,
+                &self.provider,
+                signer,
+                credential_with_key.clone(),
+            )
+            .map_err(|_| CryptoError::internal("keypackage build"))?;
+        let public_tls = bundle
+            .key_package()
+            .tls_serialize_detached()
+            .map_err(|_| CryptoError::internal("keypackage tls_serialize"))?;
+        let bundle_tls = bundle
+            .tls_serialize_detached()
+            .map_err(|_| CryptoError::internal("keypackage bundle tls_serialize"))?;
+        Ok((encode_b64(&public_tls), encode_b64(&bundle_tls)))
+    }
+
+    /// Number of usable (unconsumed) KeyPackages currently in the pool.
+    pub fn remaining_keypackages(&self) -> Result<u32> {
+        let _lock = self.keypackage_lock.lock();
+        let pkgs = self.load_keypackages()?;
+        Ok(pkgs.bundles_tls_b64.len() as u32)
+    }
+
+    /// True when the pool has fallen below [`REPLENISH_THRESHOLD`].
+    pub fn needs_replenishment(&self) -> Result<bool> {
+        Ok(self.remaining_keypackages()? < REPLENISH_THRESHOLD)
+    }
+
+    /// Top the pool up to [`REPLENISH_TARGET`] and return the number of
+    /// new KeyPackages generated. A no-op when the pool is already at or
+    /// above the target. Preserves any consumed-hash history.
+    pub fn replenish_keypackages(&self) -> Result<u32> {
+        let _lock = self.keypackage_lock.lock();
+        let id = self.require_identity()?;
+        let signer = Self::rebuild_signer(&id)?;
+        let credential = Self::rebuild_credential(&id)?;
+        let credential_with_key = CredentialWithKey {
+            credential,
+            signature_key: signer.public().into(),
+        };
+
+        let mut pkgs = self.load_keypackages()?;
+        let current = pkgs.bundles_tls_b64.len() as u32;
+        if current >= REPLENISH_TARGET {
+            return Ok(0);
+        }
+        let need = REPLENISH_TARGET - current;
+        for _ in 0..need {
+            let (_public_b64, bundle_b64) =
+                self.build_one_bundle(&signer, &credential_with_key)?;
+            pkgs.bundles_tls_b64.push(bundle_b64);
+        }
+        self.persist_keypackages(&pkgs)?;
+        Ok(need)
+    }
+
+    /// Validate a peer's public KeyPackage before we would use it.
+    /// Checks (fail-closed):
+    ///   * TLS parses,
+    ///   * ciphersuite equals [`WHISPR_CIPHERSUITE`],
+    ///   * credential type is Basic,
+    ///   * credential identity == `expected_device_id` (device binding),
+    ///   * self-signature verifies AND lifetime currently covers "now"
+    ///     (delegated to `KeyPackageIn::validate`, which is the RFC-9420
+    ///     validation path — malformed / stale / substituted packages all
+    ///     surface here).
+    pub fn validate_peer_keypackage(
+        &self,
+        wire_bytes: &[u8],
+        expected_device_id: &str,
+    ) -> Result<()> {
+        let kp_in = KeyPackageIn::tls_deserialize(&mut &wire_bytes[..]).map_err(|_| {
+            CryptoError::new(CryptoErrorCode::BadCiphertext, "malformed keypackage")
+        })?;
+        let kp = kp_in
+            .validate(self.provider.crypto(), ProtocolVersion::Mls10)
+            .map_err(|_| {
+                CryptoError::new(
+                    CryptoErrorCode::BadCiphertext,
+                    "keypackage validation failed (signature / lifetime)",
+                )
+            })?;
+        if kp.ciphersuite() != WHISPR_CIPHERSUITE {
+            return Err(CryptoError::new(
+                CryptoErrorCode::Unsupported,
+                "keypackage ciphersuite",
+            ));
+        }
+        let cred = kp.leaf_node().credential();
+        if cred.credential_type() != CredentialType::Basic {
+            return Err(CryptoError::new(
+                CryptoErrorCode::BadCiphertext,
+                "keypackage credential not Basic",
+            ));
+        }
+        if cred.serialized_content() != expected_device_id.as_bytes() {
+            return Err(CryptoError::new(
+                CryptoErrorCode::IdentityMismatch,
+                "keypackage device binding mismatch",
+            ));
+        }
+        Ok(())
+    }
+
+    /// Mark a local KeyPackage as consumed: remove its private bundle
+    /// from persistent storage and record the public hash so any future
+    /// attempt to consume the same wire bytes fails, even if the peer
+    /// replays them. This is the local counterpart to a peer using the
+    /// KeyPackage in a Welcome — Slice 3 will call it from
+    /// `establish_session`.
+    ///
+    /// Fail-closed on:
+    ///   * already-consumed hash (reuse / replay),
+    ///   * no matching bundle in the local pool (stale / substituted).
+    pub fn consume_local_keypackage(&self, wire_bytes: &[u8]) -> Result<()> {
+        let _lock = self.keypackage_lock.lock();
+        let mut pkgs = self.load_keypackages()?;
+        let hash = sha256_hex(wire_bytes);
+        if pkgs.consumed_hashes_hex.iter().any(|h| h == &hash) {
+            return Err(CryptoError::new(
+                CryptoErrorCode::BadCiphertext,
+                "keypackage already consumed",
+            ));
+        }
+
+        let mut found: Option<usize> = None;
+        for (i, b64) in pkgs.bundles_tls_b64.iter().enumerate() {
+            let bytes = decode_b64(b64).map_err(|_| {
+                CryptoError::new(CryptoErrorCode::StorageCorrupt, "bundle b64")
+            })?;
+            let bundle =
+                KeyPackageBundle::tls_deserialize(&mut bytes.as_slice()).map_err(|_| {
+                    CryptoError::new(CryptoErrorCode::StorageCorrupt, "bundle tls")
+                })?;
+            let public_tls = bundle
+                .key_package()
+                .tls_serialize_detached()
+                .map_err(|_| CryptoError::internal("kp tls_serialize"))?;
+            if public_tls.as_slice() == wire_bytes {
+                found = Some(i);
+                break;
+            }
+        }
+        let idx = found.ok_or_else(|| {
+            CryptoError::new(
+                CryptoErrorCode::BadCiphertext,
+                "no matching local keypackage (stale or substituted)",
+            )
+        })?;
+
+        // Secure deletion: dropping the base64 string releases the sole
+        // in-process copy of the private bundle bytes. The keychain slot
+        // is rewritten below without this entry.
+        let _removed = pkgs.bundles_tls_b64.remove(idx);
+        pkgs.consumed_hashes_hex.push(hash);
+        if pkgs.consumed_hashes_hex.len() > MAX_CONSUMED_HASH_HISTORY {
+            let drop_n = pkgs.consumed_hashes_hex.len() - MAX_CONSUMED_HASH_HISTORY;
+            pkgs.consumed_hashes_hex.drain(0..drop_n);
+        }
+        self.persist_keypackages(&pkgs)?;
+        Ok(())
+    }
 }
 
 impl CryptoBackend for OpenMlsBackend {
