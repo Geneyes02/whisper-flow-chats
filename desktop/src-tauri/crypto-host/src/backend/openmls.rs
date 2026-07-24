@@ -110,9 +110,16 @@ struct PersistedKeyPackages {
     /// TLS-encoded `KeyPackageBundle` (contains PRIVATE init + encryption
     /// key material). Base64 URL-safe, no padding.
     bundles_tls_b64: Vec<String>,
+    /// SHA-256 hex hashes of the PUBLIC wire form of KeyPackages that have
+    /// already been consumed by a peer (Slice 2). Bounded to
+    /// `MAX_CONSUMED_HASH_HISTORY`. Used to reject reuse/replay locally
+    /// even after the corresponding private bundle has been securely
+    /// deleted.
+    #[serde(default)]
+    consumed_hashes_hex: Vec<String>,
 }
 
-/// MLS-backed implementation. Slice 1 wiring.
+/// MLS-backed implementation. Slice 1 + Slice 2 wiring.
 pub struct OpenMlsBackend {
     store: Arc<dyn SecureStore>,
     /// OpenMLS's in-memory crypto provider. Slice 5 replaces this with a
@@ -120,6 +127,10 @@ pub struct OpenMlsBackend {
     /// the persisted snapshots on every relevant call.
     provider: OpenMlsRustCrypto,
     identity: Mutex<Option<PersistedIdentity>>,
+    /// Serializes every mutation of the persisted KeyPackage pool
+    /// (Slice 2). Prevents concurrent consume/replenish from racing
+    /// against each other and double-spending the same private bundle.
+    keypackage_lock: Mutex<()>,
 }
 
 impl OpenMlsBackend {
