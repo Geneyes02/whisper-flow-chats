@@ -101,6 +101,7 @@ async function verifyAndCachePeerIdentity(deviceId: string): Promise<{
 
 export async function ensureNativeMlsDevice(): Promise<{
   deviceId: string;
+  userId: string;
   publicSigningKey: Uint8Array;
 }> {
   requireNativeRuntime();
@@ -108,7 +109,7 @@ export async function ensureNativeMlsDevice(): Promise<{
   let identity = await provider.loadIdentity();
   if (!identity) identity = await provider.createIdentity();
 
-  await registerMlsNativeDevice({
+  const registration = await registerMlsNativeDevice({
     data: {
       deviceId: identity.deviceId,
       name: nativeDeviceName(),
@@ -136,7 +137,11 @@ export async function ensureNativeMlsDevice(): Promise<{
     await publishMlsKeyPackages({ data: { bundles: publish } });
   }
 
-  return { deviceId: identity.deviceId, publicSigningKey: identity.publicSigningKey };
+  return {
+    deviceId: identity.deviceId,
+    userId: registration.userId,
+    publicSigningKey: identity.publicSigningKey,
+  };
 }
 
 async function establishWithPeerDevice(
@@ -227,17 +232,59 @@ function fromBase64UrlCompat(value: string): Uint8Array {
   return fromBase64(standard + "=".repeat((4 - (standard.length % 4)) % 4));
 }
 
+type DeviceTarget = {
+  deviceId: string;
+  userId: string;
+};
+
+async function encryptForTarget(
+  target: DeviceTarget,
+  plaintext: Uint8Array,
+  aad: Uint8Array,
+): Promise<RecipientEnvelopeWire> {
+  const provider = getCryptoProvider();
+  await verifyAndCachePeerIdentity(target.deviceId);
+
+  let encrypted: EncryptedEnvelope;
+  try {
+    encrypted = await provider.encryptMessage(target.deviceId, plaintext, aad);
+  } catch (error) {
+    if (!(error instanceof CryptoError) || error.code !== "no_session") throw error;
+    await establishWithPeerDevice(target.userId, target.deviceId);
+    encrypted = await provider.encryptMessage(target.deviceId, plaintext, aad);
+  }
+
+  return {
+    recipient_user_id: target.userId,
+    recipient_device_id: target.deviceId,
+    envelope: envelopeToWire(encrypted),
+  };
+}
+
 export async function sendNativeMlsMessage(input: {
   conversationId: string;
   targetUserId: string;
   plaintext: Uint8Array;
-}): Promise<{ messageId: string; recipientDeviceCount: number }> {
+}): Promise<{
+  messageId: string;
+  recipientDeviceCount: number;
+  syncedOwnDeviceCount: number;
+}> {
   requireNativeRuntime();
-  const provider = getCryptoProvider();
   const local = await ensureNativeMlsDevice();
-  const devices = await listMlsRecipientDevices({ data: { targetUserId: input.targetUserId } });
-  if (devices.length === 0) {
+  const peerDevices = await listMlsRecipientDevices({ data: { targetUserId: input.targetUserId } });
+  if (peerDevices.length === 0) {
     throw new CryptoError("Recipient has no active MLS-capable devices", "no_session");
+  }
+
+  const ownDevices = await listMlsRecipientDevices({ data: { targetUserId: local.userId } });
+  const targetMap = new Map<string, DeviceTarget>();
+  for (const device of peerDevices) {
+    targetMap.set(device.device_id, { deviceId: device.device_id, userId: input.targetUserId });
+  }
+  for (const device of ownDevices) {
+    if (device.device_id === local.deviceId) continue;
+    targetMap.set(device.device_id, { deviceId: device.device_id, userId: local.userId });
   }
 
   const messageId = crypto.randomUUID();
@@ -245,23 +292,8 @@ export async function sendNativeMlsMessage(input: {
     JSON.stringify({ conversation_id: input.conversationId, message_id: messageId }),
   );
   const envelopes: RecipientEnvelopeWire[] = [];
-
-  for (const device of devices) {
-    await verifyAndCachePeerIdentity(device.device_id);
-    let encrypted: EncryptedEnvelope;
-    try {
-      encrypted = await provider.encryptMessage(device.device_id, input.plaintext, aad);
-    } catch (error) {
-      if (!(error instanceof CryptoError) || error.code !== "no_session") throw error;
-      await establishWithPeerDevice(input.targetUserId, device.device_id);
-      encrypted = await provider.encryptMessage(device.device_id, input.plaintext, aad);
-    }
-
-    envelopes.push({
-      recipient_user_id: input.targetUserId,
-      recipient_device_id: device.device_id,
-      envelope: envelopeToWire(encrypted),
-    });
+  for (const target of targetMap.values()) {
+    envelopes.push(await encryptForTarget(target, input.plaintext, aad));
   }
 
   await sendEncryptedMlsMessage({
@@ -273,7 +305,11 @@ export async function sendNativeMlsMessage(input: {
     },
   });
 
-  return { messageId, recipientDeviceCount: envelopes.length };
+  return {
+    messageId,
+    recipientDeviceCount: peerDevices.length,
+    syncedOwnDeviceCount: ownDevices.filter((device) => device.device_id !== local.deviceId).length,
+  };
 }
 
 export interface DecryptedNativeMessage {
@@ -326,9 +362,6 @@ export async function receiveNativeMlsMessages(
         createdAt: row.created_at,
       });
     } catch (error) {
-      // Deliberately leave the envelope unacknowledged. The UI can surface a
-      // security error and a future recovery flow can retry after identity or
-      // epoch repair. Never replace this with plaintext fallback.
       failures.push({ envelopeId: row.envelope_id, messageId: row.message_id, error });
     }
   }
