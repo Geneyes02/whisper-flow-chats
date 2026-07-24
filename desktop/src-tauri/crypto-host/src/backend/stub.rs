@@ -131,7 +131,6 @@ impl CryptoBackend for StubBackend {
             id.revoked = true;
             self.persist(id)?;
         }
-        // Clear session material regardless.
         Snapshot::clear(&*self.store, Slot::SessionStore)?;
         Snapshot::clear(&*self.store, Slot::PrekeyStore)?;
         Ok(())
@@ -146,17 +145,12 @@ impl CryptoBackend for StubBackend {
             })
             .collect();
         let signed_prekey_public = base64(&random_bytes(32));
-        // Deterministic pseudo-signature so the wire shape is exercised; it
-        // is NOT a valid cryptographic signature. Consumers of the stub
-        // backend MUST NOT trust it.
         let signature = {
             let mut h = Sha256::new();
             h.update(id.identity_private_key_b64.as_bytes());
             h.update(signed_prekey_public.as_bytes());
             base64(&h.finalize())
         };
-        // Persist a placeholder snapshot so keychain round-tripping is
-        // exercised in tests.
         Snapshot::save(
             &*self.store,
             Slot::PrekeyStore,
@@ -175,7 +169,6 @@ impl CryptoBackend for StubBackend {
     }
 
     fn establish_session(&self, _bundle: PrekeyBundle) -> Result<()> {
-        // Fail closed: stub cannot establish a real session.
         Err(CryptoError::unsupported(
             "stub backend cannot establish sessions",
         ))
@@ -193,8 +186,6 @@ impl CryptoBackend for StubBackend {
         _plaintext: &[u8],
         _aad: &[u8],
     ) -> Result<EncryptedEnvelope> {
-        // CRITICAL: never emit a ciphertext-shaped payload containing the
-        // plaintext. Refuse.
         Err(CryptoError::unsupported("stub backend does not encrypt"))
     }
 
@@ -209,7 +200,6 @@ impl CryptoBackend for StubBackend {
         hasher.update(id.identity_public_key_b64.as_bytes());
         hasher.update(peer_identity_public_key);
         let fp = hasher.finalize();
-        // 60-digit grouped presentation, Signal-style.
         let mut digits = String::with_capacity(60);
         for byte in fp.iter().take(30) {
             digits.push_str(&format!("{:02}", byte % 100));
@@ -240,7 +230,7 @@ fn public_view(id: &StubIdentity) -> DeviceIdentity {
 // Minimal base64 (URL-safe, no padding) so we don't take a new dependency.
 fn base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    let mut out = String::with_capacity((bytes.len() * 4 + 2) / 3);
+    let mut out = String::with_capacity((bytes.len() * 4).div_ceil(3));
     let mut i = 0;
     while i + 3 <= bytes.len() {
         let n = ((bytes[i] as u32) << 16) | ((bytes[i + 1] as u32) << 8) | (bytes[i + 2] as u32);
