@@ -15,6 +15,7 @@ on:
       - "supabase/tests/slice_2b_*.sql"
       - "src/lib/mls-directory.functions.ts"
       - "test/mls-substitution.test.ts"
+      - "docs/E2EE-CI-LOOP.md"
       - ".github/workflows/slice-2b-directory-ci.yml"
 
 jobs:
