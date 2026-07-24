@@ -32,14 +32,29 @@ jobs:
       - name: TypeScript typecheck
         run: bun x tsc --noEmit
       - name: Targeted ESLint
-        run: >-
-          bun x eslint
-          src/lib/crypto/types.ts
-          src/lib/crypto/encoding.ts
-          src/lib/crypto/libsignal-bridge.ts
-          src/lib/crypto/provider-registry.ts
-          src/lib/native-mls-client.ts
-          src/lib/native-mls.functions.ts
-          src/lib/mls-directory.functions.ts
+        id: eslint
+        shell: bash
+        run: |
+          set +e
+          bun x eslint \
+            src/lib/crypto/types.ts \
+            src/lib/crypto/encoding.ts \
+            src/lib/crypto/libsignal-bridge.ts \
+            src/lib/crypto/provider-registry.ts \
+            src/lib/native-mls-client.ts \
+            src/lib/native-mls.functions.ts \
+            src/lib/mls-directory.functions.ts \
+            > /tmp/eslint.log 2>&1
+          status=$?
+          cat /tmp/eslint.log
+          exit $status
+      - name: Upload ESLint diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-mls-eslint
+          path: /tmp/eslint.log
+          if-no-files-found: warn
       - name: KeyPackage substitution tests
+        if: success()
         run: bun x vitest run test/mls-substitution.test.ts
