@@ -1,11 +1,6 @@
 name: format native MLS files
 
 on:
-  push:
-    branches:
-      - whispr/e2ee-phase-b
-    paths:
-      - ".github/workflows/format-native-mls.yml"
   workflow_dispatch:
 
 permissions:
