@@ -17,6 +17,15 @@ pub trait CryptoBackend: Send + Sync {
     /// detect cross-backend confusion at load time.
     fn name(&self) -> &'static str;
 
+    /// Protocol identifier the backend implements. Reported in the
+    /// [`EncryptedEnvelope::protocol_id`] field and in
+    /// [`crate::api::BackendInfo`]. Default: `"whispr-none"` for backends
+    /// that intentionally do not carry a real protocol (e.g. the stub).
+    fn protocol_id(&self) -> &'static str { "whispr-none" }
+
+    /// Protocol version the backend implements. Default: 0.
+    fn protocol_version(&self) -> u16 { 0 }
+
     // ---- identity ------------------------------------------------------
 
     /// Generate a new device identity, persist it, and return the public

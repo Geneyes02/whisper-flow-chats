@@ -2,7 +2,9 @@
 //!
 //! Every persistent secret bytestring on the device goes through this
 //! module. On macOS this is Keychain Services, on Windows the Credential
-//! Manager, and on Linux the SecretService D-Bus API (GNOME Keyring / KWallet).
+//! Manager, and on Linux the SecretService D-Bus API (GNOME Keyring /
+//! KWallet). The `keyring` crate selects the right backend at compile time
+//! for the host target.
 //!
 //! We store *sealed blobs* here — the backend chooses the format (a
 //! libsignal `IdentityKeyStore` snapshot, a serialized session store, an
@@ -16,6 +18,9 @@
 //!
 //! Nothing in this module logs values. `Debug` is intentionally not
 //! implemented on the secret payload.
+//!
+//! See `docs/DATA_MAP.md` for the authoritative catalogue of what is stored
+//! in each slot, where, and under what protection.
 
 use crate::error::{CryptoError, CryptoErrorCode, Result};
 
@@ -25,7 +30,7 @@ pub const KEYCHAIN_SERVICE: &str = "app.whispr.desktop";
 
 /// A logical secret slot. Not the raw account string — that's derived
 /// deterministically from the slot so we can enumerate + rotate.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Slot {
     /// The device identity keypair + registration metadata (serialized by
     /// the backend, opaque to this module).
@@ -39,6 +44,15 @@ pub enum Slot {
 }
 
 impl Slot {
+    /// Every slot known to the host — used by wipe/logout to iterate all
+    /// secret material deterministically.
+    pub const ALL: &'static [Slot] = &[
+        Slot::DeviceIdentity,
+        Slot::SessionDbKey,
+        Slot::PrekeyStore,
+        Slot::SessionStore,
+    ];
+
     fn account(self) -> &'static str {
         match self {
             Slot::DeviceIdentity => "device-identity",
@@ -61,6 +75,15 @@ pub trait SecureStore: Send + Sync {
 }
 
 /// Production `SecureStore` — the OS keychain via the `keyring` crate.
+///
+/// Platform mapping (selected by `keyring` at compile time):
+///   * macOS   → Keychain Services (`SecKeychainItem`)
+///   * Windows → Credential Manager (`CredWrite`/`CredRead`)
+///   * Linux   → SecretService (GNOME Keyring / KWallet via D-Bus)
+///
+/// On Linux hosts without a running SecretService daemon, `get`/`put`
+/// return `StorageLocked`; the caller MUST fail closed rather than
+/// silently fall back to a file store.
 pub struct OsKeychain;
 
 impl OsKeychain {
@@ -134,6 +157,12 @@ impl MemoryStore {
     pub fn new() -> Self {
         Self { inner: parking_lot::Mutex::new(std::collections::HashMap::new()) }
     }
+
+    /// Force-inject a value for a slot. Test-only helper for the
+    /// "corrupted local state" adversarial suite.
+    pub fn inject(&self, slot: Slot, value: &str) {
+        self.inner.lock().insert(slot.account(), value.to_string());
+    }
 }
 
 impl Default for MemoryStore {
@@ -151,5 +180,22 @@ impl SecureStore for MemoryStore {
     fn delete(&self, slot: Slot) -> Result<()> {
         self.inner.lock().remove(slot.account());
         Ok(())
+    }
+}
+
+/// Wipe every slot known to the host. Missing entries are ignored.
+/// Errors are collected and the first is returned; every slot is attempted.
+pub fn wipe_all(store: &dyn SecureStore) -> Result<()> {
+    let mut first_err: Option<CryptoError> = None;
+    for slot in Slot::ALL {
+        if let Err(e) = store.delete(*slot) {
+            if first_err.is_none() {
+                first_err = Some(e);
+            }
+        }
+    }
+    match first_err {
+        Some(e) => Err(e),
+        None => Ok(()),
     }
 }
