@@ -61,7 +61,7 @@ export interface EncryptedEnvelope {
   conversationId?: string;
   messageId?: string;
   counter?: number;
-  kind?: 'prekey' | 'whisper';
+  kind?: "prekey" | "whisper";
 }
 
 export interface SafetyNumber {
@@ -102,16 +102,16 @@ export interface CryptoProvider {
 }
 
 export type CryptoErrorCode =
-  | 'no_identity'
-  | 'no_session'
-  | 'bad_ciphertext'
-  | 'identity_mismatch'
-  | 'unsupported'
-  | 'storage_locked'
-  | 'storage_corrupt'
-  | 'device_revoked'
-  | 'invalid_bundle'
-  | 'internal';
+  | "no_identity"
+  | "no_session"
+  | "bad_ciphertext"
+  | "identity_mismatch"
+  | "unsupported"
+  | "storage_locked"
+  | "storage_corrupt"
+  | "device_revoked"
+  | "invalid_bundle"
+  | "internal";
 
 /** Thrown on any authentication/decryption/provider failure. Never swallowed. */
 export class CryptoError extends Error {
@@ -120,6 +120,6 @@ export class CryptoError extends Error {
     public readonly code: CryptoErrorCode,
   ) {
     super(message);
-    this.name = 'CryptoError';
+    this.name = "CryptoError";
   }
 }

@@ -17,13 +17,13 @@ import {
   type EncryptedEnvelope,
   type PrekeyBundle,
   type SafetyNumber,
-} from './types';
-import { fromBase64Url, toBase64Url } from './encoding';
+} from "./types";
+import { fromBase64Url, toBase64Url } from "./encoding";
 
 type TauriGlobal = { __TAURI_INTERNALS__?: unknown; __TAURI__?: unknown };
 
 export function isTauriRuntime(): boolean {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === "undefined") return false;
   const w = window as unknown as TauriGlobal;
   return Boolean(w.__TAURI_INTERNALS__ ?? w.__TAURI__);
 }
@@ -59,7 +59,7 @@ type RawEncryptedEnvelope = {
   counter: number;
   ciphertext: string;
   aad: string;
-  kind: 'prekey' | 'whisper';
+  kind: "prekey" | "whisper";
 };
 
 type RawSafetyNumber = {
@@ -70,39 +70,40 @@ type RawSafetyNumber = {
 
 type RawWireError = { code?: string; message?: string };
 
-const NATIVE_ALGORITHM = 'mls-openmls-v1';
+const NATIVE_ALGORITHM = "mls-openmls-v1";
 
 const KNOWN_CODES = new Set<CryptoErrorCode>([
-  'no_identity',
-  'no_session',
-  'bad_ciphertext',
-  'identity_mismatch',
-  'unsupported',
-  'storage_locked',
-  'storage_corrupt',
-  'device_revoked',
-  'invalid_bundle',
-  'internal',
+  "no_identity",
+  "no_session",
+  "bad_ciphertext",
+  "identity_mismatch",
+  "unsupported",
+  "storage_locked",
+  "storage_corrupt",
+  "device_revoked",
+  "invalid_bundle",
+  "internal",
 ]);
 
 function wireError(err: unknown, command: string): CryptoError {
   if (err instanceof CryptoError) return err;
-  if (err && typeof err === 'object') {
+  if (err && typeof err === "object") {
     const raw = err as RawWireError;
-    const code = raw.code && KNOWN_CODES.has(raw.code as CryptoErrorCode)
-      ? (raw.code as CryptoErrorCode)
-      : 'internal';
+    const code =
+      raw.code && KNOWN_CODES.has(raw.code as CryptoErrorCode)
+        ? (raw.code as CryptoErrorCode)
+        : "internal";
     return new CryptoError(raw.message || `Native crypto command failed: ${command}`, code);
   }
-  return new CryptoError(`Native crypto command failed: ${command}`, 'internal');
+  return new CryptoError(`Native crypto command failed: ${command}`, "internal");
 }
 
 async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   if (!isTauriRuntime()) {
-    throw new CryptoError(`Tauri IPC not available; cannot invoke ${cmd}`, 'unsupported');
+    throw new CryptoError(`Tauri IPC not available; cannot invoke ${cmd}`, "unsupported");
   }
   try {
-    const tauriModuleId = '@tauri-apps/api/core';
+    const tauriModuleId = "@tauri-apps/api/core";
     // Runtime-only import: the browser build must not resolve desktop modules.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mod: any = await import(/* @vite-ignore */ tauriModuleId);
@@ -131,15 +132,15 @@ function hydrateIdentity(raw: RawDeviceIdentity): DeviceIdentity {
 
 function rawBundle(bundle: PrekeyBundle): RawPrekeyBundle {
   if (!bundle.oneTimePrekey) {
-    throw new CryptoError('MLS KeyPackage missing from peer bundle', 'invalid_bundle');
+    throw new CryptoError("MLS KeyPackage missing from peer bundle", "invalid_bundle");
   }
   return {
     device_id: bundle.deviceId,
     registration_id: null,
     identity_public_key: toBase64Url(bundle.publicSigningKey),
     signed_prekey_id: 0,
-    signed_prekey_public: '',
-    signed_prekey_signature: '',
+    signed_prekey_public: "",
+    signed_prekey_signature: "",
     one_time_prekeys: [
       {
         key_id: bundle.oneTimePrekeyKeyId ?? 1,
@@ -171,7 +172,7 @@ function hydrateEnvelope(raw: RawEncryptedEnvelope): EncryptedEnvelope {
 
 function dehydrateEnvelope(envelope: EncryptedEnvelope): RawEncryptedEnvelope {
   if (!envelope.backend || !envelope.protocolId || envelope.protocolVersion == null) {
-    throw new CryptoError('Envelope is not a native versioned MLS envelope', 'bad_ciphertext');
+    throw new CryptoError("Envelope is not a native versioned MLS envelope", "bad_ciphertext");
   }
   return {
     version: envelope.version,
@@ -180,18 +181,18 @@ function dehydrateEnvelope(envelope: EncryptedEnvelope): RawEncryptedEnvelope {
     protocol_version: envelope.protocolVersion,
     sender_device_id: envelope.senderDeviceId,
     recipient_device_id: envelope.recipientDeviceId,
-    conversation_id: envelope.conversationId ?? '',
-    message_id: envelope.messageId ?? '',
+    conversation_id: envelope.conversationId ?? "",
+    message_id: envelope.messageId ?? "",
     counter: envelope.counter ?? 0,
     ciphertext: toBase64Url(envelope.ciphertext),
     aad: toBase64Url(envelope.aad),
-    kind: envelope.kind ?? 'whisper',
+    kind: envelope.kind ?? "whisper",
   };
 }
 
 export class NativeMlsBridgeProvider implements CryptoProvider {
   readonly capabilities: CryptoCapabilities = {
-    name: 'openmls-native-v1',
+    name: "openmls-native-v1",
     // Flipped to true only after the native messaging CI gates pass.
     supportsOneOnOne: false,
     supportsGroups: false,
@@ -202,16 +203,16 @@ export class NativeMlsBridgeProvider implements CryptoProvider {
 
   constructor() {
     if (!isTauriRuntime()) {
-      throw new CryptoError('NativeMlsBridgeProvider requires a Tauri runtime', 'unsupported');
+      throw new CryptoError("NativeMlsBridgeProvider requires a Tauri runtime", "unsupported");
     }
   }
 
   async createIdentity(): Promise<DeviceIdentity> {
-    return hydrateIdentity(await tauriInvoke<RawDeviceIdentity>('whispr_crypto_create_identity'));
+    return hydrateIdentity(await tauriInvoke<RawDeviceIdentity>("whispr_crypto_create_identity"));
   }
 
   async loadIdentity(): Promise<DeviceIdentity | null> {
-    const raw = await tauriInvoke<RawDeviceIdentity | null>('whispr_crypto_load_identity');
+    const raw = await tauriInvoke<RawDeviceIdentity | null>("whispr_crypto_load_identity");
     return raw ? hydrateIdentity(raw) : null;
   }
 
@@ -221,7 +222,7 @@ export class NativeMlsBridgeProvider implements CryptoProvider {
     signedPrekeySignature: Bytes;
     oneTimePrekeys: Array<{ keyId: number; publicKey: Bytes }>;
   }> {
-    const raw = await tauriInvoke<RawPrekeyBundle>('whispr_crypto_publish_prekeys', { count });
+    const raw = await tauriInvoke<RawPrekeyBundle>("whispr_crypto_publish_prekeys", { count });
     const identity = (await this.loadIdentity()) ?? (await this.createIdentity());
     return {
       identity,
@@ -239,7 +240,7 @@ export class NativeMlsBridgeProvider implements CryptoProvider {
   }
 
   async establishSession(bundle: PrekeyBundle): Promise<void> {
-    await tauriInvoke('whispr_crypto_establish_session', { bundle: rawBundle(bundle) });
+    await tauriInvoke("whispr_crypto_establish_session", { bundle: rawBundle(bundle) });
   }
 
   async encryptMessage(
@@ -247,7 +248,7 @@ export class NativeMlsBridgeProvider implements CryptoProvider {
     plaintext: Bytes,
     aad: Bytes,
   ): Promise<EncryptedEnvelope> {
-    const raw = await tauriInvoke<RawEncryptedEnvelope>('whispr_crypto_encrypt', {
+    const raw = await tauriInvoke<RawEncryptedEnvelope>("whispr_crypto_encrypt", {
       recipientDeviceId,
       plaintext,
       aad,
@@ -257,18 +258,18 @@ export class NativeMlsBridgeProvider implements CryptoProvider {
 
   async decryptMessage(envelope: EncryptedEnvelope): Promise<Bytes> {
     return new Uint8Array(
-      await tauriInvoke<number[]>('whispr_crypto_decrypt', {
+      await tauriInvoke<number[]>("whispr_crypto_decrypt", {
         envelope: dehydrateEnvelope(envelope),
       }),
     );
   }
 
   async rotateSession(recipientDeviceId: string): Promise<void> {
-    await tauriInvoke('whispr_crypto_rotate_session', { recipientDeviceId });
+    await tauriInvoke("whispr_crypto_rotate_session", { recipientDeviceId });
   }
 
   async verifyIdentity(peerPublicIdentityKey: Bytes): Promise<SafetyNumber> {
-    const raw = await tauriInvoke<RawSafetyNumber>('whispr_crypto_safety_number', {
+    const raw = await tauriInvoke<RawSafetyNumber>("whispr_crypto_safety_number", {
       peerIdentityPublicKey: peerPublicIdentityKey,
     });
     return {
@@ -278,7 +279,7 @@ export class NativeMlsBridgeProvider implements CryptoProvider {
   }
 
   async revokeDevice(): Promise<void> {
-    await tauriInvoke('whispr_crypto_revoke_device');
+    await tauriInvoke("whispr_crypto_revoke_device");
   }
 }
 

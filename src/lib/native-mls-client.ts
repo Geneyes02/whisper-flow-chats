@@ -6,21 +6,15 @@
  * or encrypted envelopes.
  */
 
-import { getCryptoProvider, detectRuntime } from './crypto/provider-registry';
-import { CryptoError, type EncryptedEnvelope, type PrekeyBundle } from './crypto/types';
-import {
-  fromBase64,
-  fromPgHex,
-  toBase64,
-  toBase64Url,
-  utf8,
-} from './crypto/encoding';
+import { getCryptoProvider, detectRuntime } from "./crypto/provider-registry";
+import { CryptoError, type EncryptedEnvelope, type PrekeyBundle } from "./crypto/types";
+import { fromBase64, fromPgHex, toBase64, toBase64Url, utf8 } from "./crypto/encoding";
 import {
   assertConsumedKeyPackageIntegrity,
   consumeMlsKeyPackage,
   getMlsDirectoryStatus,
   publishMlsKeyPackages,
-} from './mls-directory.functions';
+} from "./mls-directory.functions";
 import {
   ackMlsEnvelope,
   getMlsDeviceIdentity,
@@ -30,53 +24,53 @@ import {
   sendEncryptedMlsMessage,
   type NativeEnvelopeWire,
   type RecipientEnvelopeWire,
-} from './native-mls.functions';
+} from "./native-mls.functions";
 
 const REPLENISH_THRESHOLD = 10;
 const REPLENISH_TARGET = 50;
 const KEYPACKAGE_LIFETIME_MS = 90 * 24 * 60 * 60 * 1000;
-const PEER_ID_CACHE_PREFIX = 'whispr:mls-peer-identity:';
+const PEER_ID_CACHE_PREFIX = "whispr:mls-peer-identity:";
 
 function requireNativeRuntime(): void {
-  if (detectRuntime() !== 'tauri') {
+  if (detectRuntime() !== "tauri") {
     throw new CryptoError(
-      'Native MLS messaging is only available in the Whispr desktop/mobile client.',
-      'unsupported',
+      "Native MLS messaging is only available in the Whispr desktop/mobile client.",
+      "unsupported",
     );
   }
 }
 
-function detectNativePlatform(): 'macos' | 'windows' | 'linux' {
-  if (typeof navigator === 'undefined') return 'linux';
+function detectNativePlatform(): "macos" | "windows" | "linux" {
+  if (typeof navigator === "undefined") return "linux";
   const ua = navigator.userAgent;
-  if (/Windows/i.test(ua)) return 'windows';
-  if (/Macintosh|Mac OS/i.test(ua)) return 'macos';
-  return 'linux';
+  if (/Windows/i.test(ua)) return "windows";
+  if (/Macintosh|Mac OS/i.test(ua)) return "macos";
+  return "linux";
 }
 
 function nativeDeviceName(): string {
   const platform = detectNativePlatform();
-  if (platform === 'macos') return 'Whispr for macOS';
-  if (platform === 'windows') return 'Whispr for Windows';
-  return 'Whispr for Linux';
+  if (platform === "macos") return "Whispr for macOS";
+  if (platform === "windows") return "Whispr for Windows";
+  return "Whispr for Linux";
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
-  const digest = await crypto.subtle.digest('SHA-256', copy.buffer);
+  const digest = await crypto.subtle.digest("SHA-256", copy.buffer);
   return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function peerCacheGet(deviceId: string): string | null {
-  if (typeof localStorage === 'undefined') return null;
+  if (typeof localStorage === "undefined") return null;
   return localStorage.getItem(PEER_ID_CACHE_PREFIX + deviceId);
 }
 
 function peerCacheSet(deviceId: string, publicKeyHex: string): void {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof localStorage === "undefined") return;
   localStorage.setItem(PEER_ID_CACHE_PREFIX + deviceId, publicKeyHex.toLowerCase());
 }
 
@@ -86,15 +80,15 @@ async function verifyAndCachePeerIdentity(deviceId: string): Promise<{
 }> {
   const row = await getMlsDeviceIdentity({ data: { deviceId } });
   if (row.device_id !== deviceId) {
-    throw new CryptoError('Peer device identity response mismatch', 'identity_mismatch');
+    throw new CryptoError("Peer device identity response mismatch", "identity_mismatch");
   }
 
   const keyHex = row.public_ed25519_key_hex.toLowerCase();
   const previous = peerCacheGet(deviceId)?.toLowerCase() ?? null;
   if (previous && previous !== keyHex) {
     throw new CryptoError(
-      'Peer device identity changed. Verify the contact before continuing.',
-      'identity_mismatch',
+      "Peer device identity changed. Verify the contact before continuing.",
+      "identity_mismatch",
     );
   }
   peerCacheSet(deviceId, keyHex);
@@ -132,7 +126,7 @@ export async function ensureNativeMlsDevice(): Promise<{
     const publish = await Promise.all(
       bundle.oneTimePrekeys.map(async (keyPackage) => ({
         device_id: identity.deviceId,
-        ciphersuite_tag: 'MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519',
+        ciphersuite_tag: "MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519",
         key_package_hash: await sha256Hex(keyPackage.publicKey),
         key_package_b64: toBase64(keyPackage.publicKey),
         credential_identity_b64: credentialIdentity,
@@ -145,7 +139,10 @@ export async function ensureNativeMlsDevice(): Promise<{
   return { deviceId: identity.deviceId, publicSigningKey: identity.publicSigningKey };
 }
 
-async function establishWithPeerDevice(targetUserId: string, targetDeviceId: string): Promise<void> {
+async function establishWithPeerDevice(
+  targetUserId: string,
+  targetDeviceId: string,
+): Promise<void> {
   const provider = getCryptoProvider();
   const consumed = await consumeMlsKeyPackage({
     data: { targetUser: targetUserId, targetDevice: targetDeviceId },
@@ -153,12 +150,12 @@ async function establishWithPeerDevice(targetUserId: string, targetDeviceId: str
   await assertConsumedKeyPackageIntegrity(consumed);
 
   if (consumed.device_id !== targetDeviceId || consumed.user_id !== targetUserId) {
-    throw new CryptoError('Consumed KeyPackage routing mismatch', 'identity_mismatch');
+    throw new CryptoError("Consumed KeyPackage routing mismatch", "identity_mismatch");
   }
 
   const peer = await verifyAndCachePeerIdentity(targetDeviceId);
   if (peer.userId !== targetUserId) {
-    throw new CryptoError('Peer device owner mismatch', 'identity_mismatch');
+    throw new CryptoError("Peer device owner mismatch", "identity_mismatch");
   }
 
   const keyPackage = fromBase64(consumed.key_package_b64);
@@ -166,7 +163,7 @@ async function establishWithPeerDevice(targetUserId: string, targetDeviceId: str
     deviceId: targetDeviceId,
     userId: targetUserId,
     cryptoVersion: 1,
-    algorithm: 'mls-openmls-v1',
+    algorithm: "mls-openmls-v1",
     publicIdentityKey: peer.publicSigningKey,
     publicSigningKey: peer.publicSigningKey,
     identityKeySignature: new Uint8Array(0),
@@ -180,19 +177,19 @@ async function establishWithPeerDevice(targetUserId: string, targetDeviceId: str
 
 function envelopeToWire(envelope: EncryptedEnvelope): NativeEnvelopeWire {
   if (
-    envelope.protocolId !== 'whispr-mls-v1' ||
+    envelope.protocolId !== "whispr-mls-v1" ||
     envelope.protocolVersion !== 1 ||
     !envelope.backend ||
     !envelope.conversationId ||
     !envelope.messageId ||
     !envelope.kind
   ) {
-    throw new CryptoError('Native MLS envelope metadata incomplete', 'internal');
+    throw new CryptoError("Native MLS envelope metadata incomplete", "internal");
   }
   return {
     version: envelope.version,
     backend: envelope.backend,
-    protocol_id: 'whispr-mls-v1',
+    protocol_id: "whispr-mls-v1",
     protocol_version: 1,
     sender_device_id: envelope.senderDeviceId,
     recipient_device_id: envelope.recipientDeviceId,
@@ -226,8 +223,8 @@ function wireToEnvelope(wire: NativeEnvelopeWire): EncryptedEnvelope {
 }
 
 function fromBase64UrlCompat(value: string): Uint8Array {
-  const standard = value.replace(/-/g, '+').replace(/_/g, '/');
-  return fromBase64(standard + '='.repeat((4 - (standard.length % 4)) % 4));
+  const standard = value.replace(/-/g, "+").replace(/_/g, "/");
+  return fromBase64(standard + "=".repeat((4 - (standard.length % 4)) % 4));
 }
 
 export async function sendNativeMlsMessage(input: {
@@ -240,7 +237,7 @@ export async function sendNativeMlsMessage(input: {
   const local = await ensureNativeMlsDevice();
   const devices = await listMlsRecipientDevices({ data: { targetUserId: input.targetUserId } });
   if (devices.length === 0) {
-    throw new CryptoError('Recipient has no active MLS-capable devices', 'no_session');
+    throw new CryptoError("Recipient has no active MLS-capable devices", "no_session");
   }
 
   const messageId = crypto.randomUUID();
@@ -255,7 +252,7 @@ export async function sendNativeMlsMessage(input: {
     try {
       encrypted = await provider.encryptMessage(device.device_id, input.plaintext, aad);
     } catch (error) {
-      if (!(error instanceof CryptoError) || error.code !== 'no_session') throw error;
+      if (!(error instanceof CryptoError) || error.code !== "no_session") throw error;
       await establishWithPeerDevice(input.targetUserId, device.device_id);
       encrypted = await provider.encryptMessage(device.device_id, input.plaintext, aad);
     }
