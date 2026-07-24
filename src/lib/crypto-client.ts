@@ -66,7 +66,7 @@ export async function ensureRegisteredDevice(): Promise<{
 
   await provider.bindServerDeviceId(registered.id);
   await refreshPrekeys(registered.id, 25);
-  return { deviceId: registered.id, devicePublicId: registered.device_public_id };
+  return { deviceId: registered.id, devicePublicId: registered.device_public_id ?? identity.devicePublicId };
 }
 
 export async function refreshPrekeys(deviceId: string, count = 10): Promise<void> {
