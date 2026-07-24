@@ -112,7 +112,7 @@ SELECT public.send_mls_message(
 
 DO $$
 DECLARE
-  message_ciphertext text;
+  message_ciphertext bytea;
   envelope_ciphertext text;
 BEGIN
   SELECT m.ciphertext INTO message_ciphertext
@@ -122,7 +122,7 @@ BEGIN
     RAISE EXCEPTION 'message row must not contain plaintext/ciphertext body';
   END IF;
 
-  SELECT e.ciphertext INTO envelope_ciphertext
+  SELECT convert_from(e.ciphertext, 'UTF8') INTO envelope_ciphertext
     FROM public.message_envelopes e
    WHERE e.message_id = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
   IF envelope_ciphertext IS NULL OR envelope_ciphertext !~ 'whispr-mls-v1' THEN
