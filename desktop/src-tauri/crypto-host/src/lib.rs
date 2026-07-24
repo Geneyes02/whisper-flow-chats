@@ -10,11 +10,12 @@
 //!   on any concrete cryptographic library directly. It depends on this
 //!   crate's public [`api`] surface and nothing else.
 //! * The concrete backend is selected at build time via Cargo features
-//!   (`backend-stub`, `backend-libsignal`). The `CryptoBackend` trait is
-//!   the seam.
-//! * Private keys never cross the crate boundary. Every public type in
-//!   [`types`] is safe to send across the Tauri IPC boundary into the
-//!   WebView.
+//!   (`backend-stub`, `backend-libsignal`, `backend-openmls`). The
+//!   `CryptoBackend` trait is the seam.
+//! * Private protocol keys never cross the crate boundary. Every public type
+//!   in [`types`] is safe to send across the Tauri IPC boundary into the
+//!   WebView. Local-cache plaintext may cross local IPC for sealing/opening,
+//!   but the OS-keychain cache key never does.
 //! * Errors are mapped through [`error::CryptoError`] with stable codes.
 //!   Backend-specific error internals are erased before crossing the
 //!   boundary. Fail-closed: unknown errors become `Unsupported`.
@@ -38,6 +39,7 @@ pub mod backend;
 pub mod conformance;
 pub mod error;
 pub mod keychain;
+pub mod local_seal;
 pub mod storage;
 pub mod types;
 
