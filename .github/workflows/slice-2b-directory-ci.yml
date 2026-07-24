@@ -6,6 +6,7 @@ on:
     paths:
       - "supabase/migrations/**"
       - "supabase/tests/slice_2b_*.sql"
+      - "supabase/tests/native_mls_messaging.sql"
       - "src/lib/mls-directory.functions.ts"
       - "test/mls-substitution.test.ts"
       - ".github/workflows/slice-2b-directory-ci.yml"
@@ -13,6 +14,7 @@ on:
     paths:
       - "supabase/migrations/**"
       - "supabase/tests/slice_2b_*.sql"
+      - "supabase/tests/native_mls_messaging.sql"
       - "src/lib/mls-directory.functions.ts"
       - "test/mls-substitution.test.ts"
       - "docs/E2EE-CI-LOOP.md"
@@ -20,7 +22,7 @@ on:
 
 jobs:
   directory-sql:
-    name: MLS KeyPackage directory (SQL integration)
+    name: MLS KeyPackage directory + relay (SQL integration)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -92,10 +94,13 @@ jobs:
           done
           tail -n 80 /tmp/migrations.log
 
-      - name: Run Slice 2B directory tests
+      - name: Run Slice 2B KeyPackage directory tests
         if: success()
-        run: |
-          psql -v ON_ERROR_STOP=1 -f supabase/tests/slice_2b_directory.sql
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/slice_2b_directory.sql
+
+      - name: Run native MLS relay adversarial tests
+        if: success()
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/native_mls_messaging.sql
 
       - name: Upload migration diagnostics
         if: always()
