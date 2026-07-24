@@ -641,10 +641,10 @@ function PhoneMock() {
 
 function SecuritySection() {
   const points = [
-    { t: "End-to-end encryption by design", b: "The messaging layer is architected to plug into an established E2EE protocol. Whispr's servers route — they do not read." },
-    { t: "Your identity, your keys", b: "Passkeys, magic links, and username sign-in. Device verification with human-readable safety numbers." },
-    { t: "Minimal metadata", b: "We collect what we need to deliver messages. Nothing more. A plain-English privacy dashboard shows you exactly what's stored." },
-    { t: "Open to scrutiny", b: "Security disclosures, a public bug bounty, and independent audits — because trust is earned in public." },
+    { t: "Encrypted today, E2EE staged next", b: "TLS 1.3 in transit and encryption at rest ship today. Client-side end-to-end encryption is on a phased, audited rollout — libsignal for 1:1, MLS for groups, SFrame for calls. No silent downgrades." },
+    { t: "Your identity, your keys", b: "Per-device keys, safety numbers for out-of-band verification, and passkey / magic-link sign-in on the roadmap. Adding a device never shares private key material." },
+    { t: "Minimal metadata, visible to you", b: "We store only what's required to deliver messages. Your privacy dashboard shows the exact fields — live from the database, not a marketing summary." },
+    { t: "Open to scrutiny", b: "Public architecture page, security disclosures, a bug-bounty program launching with Phase 1, and independent cryptographic review as a gate on every E2EE claim." },
   ];
 
   return (
@@ -658,13 +658,12 @@ function SecuritySection() {
               Private by architecture, not by promise.
             </h2>
             <p className="mt-4 max-w-lg text-lg text-muted-foreground">
-              Whispr is designed so that privacy isn't a marketing checkbox — it's a property of the system.
+              Whispr is designed so that privacy is a property of the system — verifiable, not aspirational. Read exactly what we protect today and what we don't.
             </p>
-            <a href="#faq" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-electric hover:underline">
+            <Link to="/security" className="mt-6 inline-flex items-center gap-1 text-sm font-medium text-electric hover:underline">
               Read the security overview
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
-            </a>
-
+            </Link>
           </div>
 
           <ul className="space-y-3">
@@ -687,6 +686,7 @@ function SecuritySection() {
     </section>
   );
 }
+
 
 /* -------------------------- PLATFORMS -------------------------- */
 
