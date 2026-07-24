@@ -60,9 +60,10 @@ export const consumeMlsKeyPackage = createServerFn({ method: 'POST' })
       'consume_mls_key_package',
       {
         target_user: data.targetUser,
-        target_device: data.targetDevice ?? null,
+        target_device: data.targetDevice ?? undefined,
       },
     );
+
     if (error) throw new Error(error.message);
     const row = (rows ?? [])[0] as
       | {
