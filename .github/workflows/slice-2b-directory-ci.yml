@@ -63,6 +63,18 @@ jobs:
           CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
             LANGUAGE sql STABLE AS
           $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+
+          CREATE SCHEMA IF NOT EXISTS storage;
+          CREATE TABLE IF NOT EXISTS storage.objects (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            bucket_id text NOT NULL,
+            name text NOT NULL,
+            owner uuid,
+            created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now()
+          );
+          ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
           DO $do$ BEGIN
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
               CREATE ROLE authenticated;
