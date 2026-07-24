@@ -550,4 +550,66 @@ mod tests {
         assert!(b.publish_prekeys(0).is_err());
         assert!(b.publish_prekeys(MAX_KEYPACKAGES_PER_CALL + 1).is_err());
     }
+
+    /// Slice 1 API-shape regression.
+    ///
+    /// Intent (per Slice 1 freeze checklist): this does NOT claim to
+    /// mathematically prove secrecy of the private init/encryption keys.
+    /// It proves that the *public return type* of `publish_prekeys`
+    /// exposes only the public `KeyPackage` wire form — no
+    /// `KeyPackageBundle` (which carries private init/encryption keys)
+    /// or other private-state object is accidentally serialized through
+    /// the API boundary.
+    ///
+    /// Failure of this test means a future refactor changed the wire
+    /// shape to include private state; do NOT "fix" it by weakening
+    /// the assertions.
+    #[test]
+    fn keypackage_private_material_is_not_reconstructable_from_public_wire_output() {
+        let store: Arc<dyn SecureStore> = Arc::new(MemoryStore::new());
+        let b = OpenMlsBackend::new(store.clone()).unwrap();
+        b.create_identity().unwrap();
+        let bundle = b.publish_prekeys(3).unwrap();
+
+        // 1. Every wire entry MUST parse as a public `KeyPackage`.
+        //    If it were a `KeyPackageBundle` we'd be leaking private
+        //    init + encryption keys through the API surface.
+        for pk in &bundle.one_time_prekeys {
+            let bytes = URL_SAFE_NO_PAD
+                .decode(&pk.public_bytes_b64)
+                .expect("wire entry must be URL-safe base64");
+            KeyPackage::tls_deserialize(&mut bytes.as_slice())
+                .expect("wire entry must decode as public KeyPackage");
+
+            // 2. The same bytes MUST NOT decode as a KeyPackageBundle.
+            //    A bundle carries additional private key material; if
+            //    this ever succeeds, the API boundary regressed.
+            let as_bundle = KeyPackageBundle::tls_deserialize(&mut bytes.as_slice());
+            assert!(
+                as_bundle.is_err(),
+                "public wire entry unexpectedly decoded as KeyPackageBundle \
+                 (would leak private init/encryption keys)"
+            );
+        }
+
+        // 3. The serialized wire representation of the whole bundle must
+        //    not contain any field literally named like a private-state
+        //    accessor. This catches accidental #[derive(Serialize)] on a
+        //    struct that also holds a private half.
+        let wire_json = serde_json::to_string(&bundle).unwrap();
+        for forbidden in [
+            "private",
+            "secret",
+            "bundle",
+            "init_secret",
+            "encryption_secret",
+            "signature_private",
+        ] {
+            assert!(
+                !wire_json.to_lowercase().contains(forbidden),
+                "wire bundle exposes forbidden field name: {forbidden}"
+            );
+        }
+    }
 }
+
