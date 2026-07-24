@@ -94,6 +94,13 @@ export const registerMlsNativeDevice = createServerFn({ method: 'POST' })
     return { id: data.deviceId, device_public_id: data.deviceId };
   });
 
+type MlsDeviceDirectoryRow = {
+  device_id: string;
+  user_id: string;
+  device_public_id: string | null;
+  public_ed25519_key_hex: string;
+};
+
 export const getMlsDeviceIdentity = createServerFn({ method: 'POST' })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) =>
@@ -105,14 +112,23 @@ export const getMlsDeviceIdentity = createServerFn({ method: 'POST' })
       { target_device: data.deviceId },
     );
     if (error) throw new Error(error.message);
-    const row = (rows as Array<{
-      device_id: string;
-      user_id: string;
-      device_public_id: string | null;
-      public_ed25519_key_hex: string;
-    }> | null)?.[0];
+    const row = (rows as MlsDeviceDirectoryRow[] | null)?.[0];
     if (!row) throw new Error('MLS device identity not found');
     return row;
+  });
+
+export const listMlsRecipientDevices = createServerFn({ method: 'POST' })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z.object({ targetUserId: z.string().uuid() }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { data: rows, error } = await rpcClient(context.supabase).rpc(
+      'list_mls_recipient_devices',
+      { target_user: data.targetUserId },
+    );
+    if (error) throw new Error(error.message);
+    return (rows ?? []) as MlsDeviceDirectoryRow[];
   });
 
 const NativeEnvelope = z.object({
