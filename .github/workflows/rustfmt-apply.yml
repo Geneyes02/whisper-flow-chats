@@ -2,6 +2,14 @@ name: rustfmt apply (Phase B branch)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - whispr/e2ee-phase-b
+    paths:
+      - "desktop/src-tauri/crypto-host/src/backend/openmls_runtime.rs"
+      - "desktop/src-tauri/crypto-host/src/backend/mod.rs"
+      - "desktop/src-tauri/crypto-host/src/keychain.rs"
+      - ".github/workflows/rustfmt-apply.yml"
 
 permissions:
   contents: write
