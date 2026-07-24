@@ -537,6 +537,7 @@ impl CryptoBackend for OpenMlsBackend {
         let mut persisted = PersistedKeyPackages {
             ciphersuite_tag: WHISPR_CIPHERSUITE_TAG.to_string(),
             bundles_tls_b64: Vec::with_capacity(count as usize),
+            consumed_hashes_hex: Vec::new(),
         };
 
         for key_id in 0..count {
