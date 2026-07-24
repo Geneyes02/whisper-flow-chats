@@ -576,7 +576,7 @@ mod tests {
         //    init + encryption keys through the API surface.
         for pk in &bundle.one_time_prekeys {
             let bytes = URL_SAFE_NO_PAD
-                .decode(&pk.public_bytes_b64)
+                .decode(&pk.public_key)
                 .expect("wire entry must be URL-safe base64");
             KeyPackage::tls_deserialize(&mut bytes.as_slice())
                 .expect("wire entry must decode as public KeyPackage");
