@@ -25,7 +25,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: desktop/src-tauri
-      - run: sudo apt-get update -qq && sudo apt-get install -y -qq libdbus-1-dev libsecret-1-dev
+      - name: Install native + Tauri Linux dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libssl-dev \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            patchelf \
+            libdbus-1-dev \
+            libsecret-1-dev >/dev/null
       - name: rustfmt
         working-directory: desktop/src-tauri/crypto-host
         run: cargo fmt --all -- --check
@@ -37,6 +53,22 @@ jobs:
         env:
           RUST_BACKTRACE: '1'
         run: cargo test --no-default-features --features backend-openmls -- --nocapture
+      - name: Ensure CI-only Tauri icon exists
+        shell: bash
+        run: |
+          if [ ! -f desktop/src-tauri/icons/icon.png ]; then
+            python - <<'PY'
+            from pathlib import Path
+            import base64
+
+            png = base64.b64decode(
+                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nGQAAAAASUVORK5CYII='
+            )
+            path = Path('desktop/src-tauri/icons/icon.png')
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(png)
+            PY
+          fi
       - name: default desktop build
         run: cargo check --manifest-path desktop/src-tauri/Cargo.toml
 
